@@ -26,65 +26,106 @@ import com.donzilzenovka.villagemechanics.config.ModConfiguration;
 import com.donzilzenovka.villagemechanics.config.ProfessionTradeConfig;
 import com.donzilzenovka.villagemechanics.config.WeightedTrade;
 
-import cpw.mods.fml.common.registry.VillagerRegistry;
-
-public final class TradeManager implements VillagerRegistry.IVillageTradeHandler {
+public final class TradeManager {
 
     private final ModConfiguration configuration;
     private final Logger logger;
-    private final Set<Integer> registeredProfessions = new HashSet<Integer>();
     private final Set<String> reportedInvalidItems = new HashSet<String>();
-    private final Map<Integer, Map<String, WeightedTrade>> observedPools = new LinkedHashMap<Integer, Map<String, WeightedTrade>>();
 
     public TradeManager(ModConfiguration configuration, Logger logger) {
         this.configuration = configuration;
         this.logger = logger;
     }
 
-    public synchronized void register() {
-        for (Integer profession : configuration.getTrades()
-            .keySet()) {
-            if (registeredProfessions.add(profession)) {
-                VillagerRegistry.instance()
-                    .registerVillageTradeHandler(profession.intValue(), this);
-                logger.info("Registered weighted trade handler for profession {}", profession);
-            }
-        }
-    }
-
-    public synchronized void registerProfessions(Iterable<Integer> professions) {
-        for (Integer profession : professions) {
-            if (profession != null && profession.intValue() >= 0) registerProfession(profession.intValue());
-        }
-    }
-
-    private void registerProfession(int profession) {
-        if (registeredProfessions.add(Integer.valueOf(profession))) {
-            VillagerRegistry.instance()
-                .registerVillageTradeHandler(profession, this);
-            logger.info("Registered trade-pool handler for profession {}", profession);
-        }
-    }
-
     public synchronized void reload() {
         configuration.load();
-        register();
     }
 
     public synchronized String discoverProfession(int profession) {
-        String created = configuration.discoverProfession(profession);
-        registerProfession(profession);
-        return created;
+        return configuration.discoverProfession(profession);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void applyOwnedTrades(EntityVillager villager, EntityPlayer player) {
+        int profession = villager.getProfession();
+        if (profession == 5 || profession == 1210950779) return;
+
+        ProfessionTradeConfig config = configuration.getTradeConfig(profession);
+        if (config == null || config.pool == null || config.pool.isEmpty()) return;
+
+        int revision = poolRevision(config);
+        long seed = villager.getUniqueID()
+            .getMostSignificantBits()
+            ^ villager.getUniqueID()
+                .getLeastSignificantBits()
+            ^ revision;
+        Random random = new Random(seed);
+        List<WeightedTrade> candidates = validCandidates(config.pool);
+        IntRange offerCount = config.offerCount == null ? new IntRange(1) : config.offerCount;
+        int requested = Math.max(1, offerCount.choose(random));
+        int count = Math.min(requested, candidates.size());
+
+        List<MerchantRecipe> expected = new ArrayList<MerchantRecipe>();
+        while (expected.size() < count && !candidates.isEmpty()) {
+            WeightedTrade selected = takeWeighted(candidates, random);
+            MerchantRecipe recipe = selected == null ? null : createRecipe(selected, random);
+            if (recipe != null) expected.add(recipe);
+        }
+
+        MerchantRecipeList current = villager.getRecipes(player);
+        Map<String, MerchantRecipe> preserved = new LinkedHashMap<String, MerchantRecipe>();
+        for (MerchantRecipe recipe : (List<MerchantRecipe>) current) {
+            if (recipe != null) preserved.put(recipeKey(recipe), recipe);
+        }
+
+        current.clear();
+        for (MerchantRecipe recipe : expected) {
+            MerchantRecipe existing = preserved.get(recipeKey(recipe));
+            current.add(existing == null ? recipe : existing);
+        }
+        villager.getEntityData()
+            .setInteger("VillageMechanicsTradeRevision", revision);
+    }
+
+    private List<WeightedTrade> validCandidates(List<WeightedTrade> pool) {
+        List<WeightedTrade> candidates = new ArrayList<WeightedTrade>();
+        for (WeightedTrade trade : pool) {
+            if (trade != null && trade.weight > 0 && trade.buy != null && trade.sell != null) candidates.add(trade);
+        }
+        return candidates;
+    }
+
+    private int poolRevision(ProfessionTradeConfig config) {
+        int revision = 31 + config.profession;
+        revision = 31 * revision + rangeKey(config.offerCount).hashCode();
+        for (WeightedTrade trade : config.pool) {
+            if (trade != null) revision = 31 * revision + (31 * trade.weight + tradeKey(trade).hashCode());
+        }
+        return revision;
+    }
+
+    private String recipeKey(MerchantRecipe recipe) {
+        NBTTagCompound tags = recipe.writeToTags();
+        return itemStackKey(recipe.getItemToBuy()) + '|'
+            + itemStackKey(recipe.getSecondItemToBuy())
+            + '|'
+            + itemStackKey(recipe.getItemToSell())
+            + '|'
+            + tags.getInteger("maxUses");
+    }
+
+    private String itemStackKey(ItemStack stack) {
+        if (stack == null || stack.getItem() == null) return "-";
+        Object name = Item.itemRegistry.getNameForObject(stack.getItem());
+        String nbt = stack.hasTagCompound() ? stack.getTagCompound()
+            .toString() : "null";
+        return String.valueOf(name) + ':' + stack.getItemDamage() + ':' + stack.stackSize + ':' + nbt;
     }
 
     @SuppressWarnings("unchecked")
     public int[] recordObservedTrades(EntityVillager villager, EntityPlayer player) {
         MerchantRecipeList recipes = villager.getRecipes(player);
         List<WeightedTrade> observed = new ArrayList<WeightedTrade>();
-        synchronized (this) {
-            Map<String, WeightedTrade> pool = observedPools.get(Integer.valueOf(villager.getProfession()));
-            if (pool != null) observed.addAll(pool.values());
-        }
         if (recipes != null) {
             for (MerchantRecipe recipe : (List<MerchantRecipe>) recipes) {
                 if (recipe == null) continue;
@@ -92,39 +133,6 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
             }
         }
         return configuration.recordObservedTrades(villager.getProfession(), observed);
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void manipulateTradesForVillager(EntityVillager villager, MerchantRecipeList recipes, Random random) {
-        observePool(villager.getProfession(), recipes);
-        ProfessionTradeConfig config = configuration.getTradeConfig(villager.getProfession());
-        if (config == null || config.pool == null || config.pool.isEmpty()) return;
-
-        recipes.clear();
-
-        List<WeightedTrade> candidates = new ArrayList<WeightedTrade>();
-        for (WeightedTrade trade : config.pool) {
-            if (trade != null && trade.weight > 0 && trade.buy != null && trade.sell != null) candidates.add(trade);
-        }
-        WeightedTrade selected = takeWeighted(candidates, random);
-        MerchantRecipe recipe = selected == null ? null : createRecipe(selected, random);
-        if (recipe != null) recipes.add(recipe);
-    }
-
-    @SuppressWarnings("unchecked")
-    private synchronized void observePool(int profession, MerchantRecipeList recipes) {
-        Map<String, WeightedTrade> pool = observedPools.get(Integer.valueOf(profession));
-        if (pool == null) {
-            pool = new LinkedHashMap<String, WeightedTrade>();
-            observedPools.put(Integer.valueOf(profession), pool);
-        }
-        for (MerchantRecipe recipe : (List<MerchantRecipe>) recipes) {
-            if (recipe == null) continue;
-            WeightedTrade trade = describe(recipe);
-            String key = tradeKey(trade);
-            if (!pool.containsKey(key)) pool.put(key, trade);
-        }
     }
 
     private WeightedTrade takeWeighted(List<WeightedTrade> candidates, Random random) {

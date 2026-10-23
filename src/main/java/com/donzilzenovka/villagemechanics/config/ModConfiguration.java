@@ -88,7 +88,7 @@ public final class ModConfiguration {
         }
 
         catalogue.profession = profession;
-        catalogue.schemaVersion = 2;
+        catalogue.schemaVersion = 3;
         catalogue.mode = null;
         catalogue.rolls = null;
         catalogue.trades = null;
