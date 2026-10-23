@@ -90,7 +90,9 @@ public final class VillageMechanicsCommand extends CommandBase {
             .addVector(look.xCoord * INSPECT_RANGE, look.yCoord * INSPECT_RANGE, look.zCoord * INSPECT_RANGE);
 
         double maximumDistance = INSPECT_RANGE;
-        MovingObjectPosition blockHit = player.worldObj.rayTraceBlocks(start, end);
+        Vec3 blockStart = Vec3.createVectorHelper(start.xCoord, start.yCoord, start.zCoord);
+        Vec3 blockEnd = Vec3.createVectorHelper(end.xCoord, end.yCoord, end.zCoord);
+        MovingObjectPosition blockHit = player.worldObj.rayTraceBlocks(blockStart, blockEnd);
         if (blockHit != null) maximumDistance = start.distanceTo(blockHit.hitVec);
 
         AxisAlignedBB searchArea = player.boundingBox
