@@ -5,6 +5,7 @@ import java.util.List;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.ai.attributes.IAttributeInstance;
 import net.minecraft.entity.passive.EntityVillager;
@@ -13,11 +14,15 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 
 import com.donzilzenovka.villagemechanics.config.ModConfiguration;
 import com.donzilzenovka.villagemechanics.trade.TradeManager;
 
 public final class VillageMechanicsCommand extends CommandBase {
+
+    private static final double INSPECT_RANGE = 8.0D;
 
     private final ModConfiguration configuration;
     private final TradeManager tradeManager;
@@ -59,32 +64,62 @@ public final class VillageMechanicsCommand extends CommandBase {
 
     @SuppressWarnings("unchecked")
     private void inspect(EntityPlayer player) throws CommandException {
-        AxisAlignedBB area = player.boundingBox.expand(8.0D, 4.0D, 8.0D);
-        List<EntityVillager> villagers = player.worldObj.getEntitiesWithinAABB(EntityVillager.class, area);
-        EntityVillager nearest = null;
-        double nearestDistance = Double.MAX_VALUE;
-        for (EntityVillager villager : villagers) {
-            double distance = player.getDistanceSqToEntity(villager);
-            if (distance < nearestDistance) {
-                nearest = villager;
-                nearestDistance = distance;
-            }
-        }
-        if (nearest == null) throw new CommandException("No villager found within 8 blocks.");
+        EntityVillager target = targetedVillager(player);
+        if (target == null) throw new CommandException("No villager under crosshair within 8 blocks.");
 
-        IAttributeInstance attack = nearest.getEntityAttribute(SharedMonsterAttributes.attackDamage);
+        IAttributeInstance attack = target.getEntityAttribute(SharedMonsterAttributes.attackDamage);
         player.addChatMessage(
             new ChatComponentText(
-                "Villager profession=" + nearest.getProfession()
+                "Villager professionId=" + target.getProfession()
                     + " health="
-                    + nearest.getHealth()
+                    + target.getHealth()
                     + "/"
-                    + nearest.getMaxHealth()
+                    + target.getMaxHealth()
                     + " attack="
                     + (attack == null ? "missing" : attack.getAttributeValue())
                     + " armour="
-                    + nearest.getTotalArmorValue()));
-        player.addChatMessage(new ChatComponentText("Equipment: " + equipment(nearest)));
+                    + target.getTotalArmorValue()));
+        player.addChatMessage(new ChatComponentText("Equipment: " + equipment(target)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private EntityVillager targetedVillager(EntityPlayer player) {
+        Vec3 start = Vec3.createVectorHelper(player.posX, player.posY + player.getEyeHeight(), player.posZ);
+        Vec3 look = player.getLook(1.0F);
+        Vec3 end = start
+            .addVector(look.xCoord * INSPECT_RANGE, look.yCoord * INSPECT_RANGE, look.zCoord * INSPECT_RANGE);
+
+        double maximumDistance = INSPECT_RANGE;
+        MovingObjectPosition blockHit = player.worldObj.rayTraceBlocks(start, end);
+        if (blockHit != null) maximumDistance = start.distanceTo(blockHit.hitVec);
+
+        AxisAlignedBB searchArea = player.boundingBox
+            .addCoord(look.xCoord * INSPECT_RANGE, look.yCoord * INSPECT_RANGE, look.zCoord * INSPECT_RANGE)
+            .expand(1.0D, 1.0D, 1.0D);
+        List<Entity> entities = player.worldObj.getEntitiesWithinAABBExcludingEntity(player, searchArea);
+
+        EntityVillager target = null;
+        double targetDistance = maximumDistance;
+        for (Entity entity : entities) {
+            if (!(entity instanceof EntityVillager) || !entity.canBeCollidedWith()) continue;
+
+            float border = entity.getCollisionBorderSize();
+            AxisAlignedBB hitBox = entity.boundingBox.expand(border, border, border);
+            MovingObjectPosition hit = hitBox.calculateIntercept(start, end);
+            if (hitBox.isVecInside(start)) {
+                if (targetDistance >= 0.0D) {
+                    target = (EntityVillager) entity;
+                    targetDistance = 0.0D;
+                }
+            } else if (hit != null) {
+                double distance = start.distanceTo(hit.hitVec);
+                if (distance <= targetDistance) {
+                    target = (EntityVillager) entity;
+                    targetDistance = distance;
+                }
+            }
+        }
+        return target;
     }
 
     private String equipment(EntityVillager villager) {
