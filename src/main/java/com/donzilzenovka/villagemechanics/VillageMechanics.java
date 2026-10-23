@@ -18,6 +18,7 @@ import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.registry.VillagerRegistry;
 
 @Mod(
     modid = VillageMechanics.MOD_ID,
@@ -54,6 +55,7 @@ public final class VillageMechanics {
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
+        configuration.discoverProfessions(VillagerRegistry.getRegisteredVillagers());
         tradeManager = new TradeManager(configuration, LogManager.getLogger(MOD_ID));
         tradeManager.register();
     }

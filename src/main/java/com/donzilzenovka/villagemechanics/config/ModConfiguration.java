@@ -9,7 +9,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.logging.log4j.Logger;
@@ -40,17 +39,29 @@ public final class ModConfiguration {
 
     public synchronized void load() {
         ensureDirectories();
-        List<ProfessionTradeConfig> defaults = DefaultConfigurations.createTradeDefaults();
-        for (ProfessionTradeConfig config : defaults) {
-            String name = DefaultConfigurations.fileName(config.profession);
-            writeIfMissing(new File(tradesDirectory, name), config);
-            writeReplacing(new File(generatedDefaultsDirectory, name), config);
-        }
         writeIfMissing(combatFile, DefaultConfigurations.createCombatDefault());
 
         combat = read(combatFile, CombatConfig.class, DefaultConfigurations.createCombatDefault());
         trades = Collections.unmodifiableMap(readTradeFiles());
         logger.info("Loaded {} profession trade configurations", trades.size());
+    }
+
+    public synchronized void discoverProfessions(Iterable<Integer> professions) {
+        boolean added = false;
+        for (Integer profession : professions) {
+            if (profession == null || profession.intValue() < 0 || trades.containsKey(profession)) continue;
+            int id = profession.intValue();
+            String name = DefaultConfigurations.fileName(id);
+            File active = new File(tradesDirectory, name);
+            if (active.exists()) continue;
+
+            ProfessionTradeConfig config = DefaultConfigurations.createDiscoveredProfessionDefault(id);
+            writeReplacing(active, config);
+            writeReplacing(new File(generatedDefaultsDirectory, name), config);
+            logger.info("Created safe append template {} for registered profession {}", name, id);
+            added = true;
+        }
+        if (added) load();
     }
 
     public synchronized String discoverProfession(int profession) {

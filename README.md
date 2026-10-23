@@ -22,15 +22,17 @@ Configuration is generated under `config/VillageMechanics/` on first launch.
 
 ## Trade configuration
 
-The five vanilla professions receive individual files in `config/VillageMechanics/trades/`.
-Each file may use `replace` mode to own the final recipe list or `append` mode to preserve trades
-added earlier by vanilla and other mods. `rolls` controls how many unique entries are chosen, and
-each entry's positive `weight` is relative to the total weight of the remaining entries.
+Village Mechanics does not assume that vanilla profession IDs or vanilla trade tables are present.
+During mod post-initialization, Forge's registered profession IDs receive safe empty templates in
+`config/VillageMechanics/trades/`. Each file may use `replace` mode to own the final recipe list or
+`append` mode to preserve trades added earlier by other mods. `rolls` controls how many unique
+entries are chosen, and each entry's positive `weight` is relative to the total remaining weight.
 
-Fresh reference copies are written to `config/VillageMechanics/generated_defaults/` on every load.
 Files in the active `trades/` directory are only created when missing and are never overwritten.
-Inspecting a previously unknown modded profession creates a safe empty append template named
-`profession_<id>.json` in both directories and registers it for subsequent trade generation.
+Inspecting a profession that was not registered with Forge creates a safe empty append template
+named `profession_<id>.json` in both `trades/` and `generated_defaults/`, then registers it for
+subsequent trade generation. Existing legacy files remain explicit user configuration and are not
+deleted automatically.
 
 The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
 profession is also registered when reloading. Existing villagers retain recipes already saved in
