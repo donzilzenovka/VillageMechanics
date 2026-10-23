@@ -5,6 +5,7 @@ public final class ItemSpec {
     public String item;
     public int meta;
     public IntRange count = new IntRange(1);
+    public String nbt;
 
     public ItemSpec() {}
 

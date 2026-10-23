@@ -9,6 +9,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.logging.log4j.Logger;
@@ -83,6 +85,38 @@ public final class ModConfiguration {
         return null;
     }
 
+    public synchronized int[] recordObservedTrades(int profession, List<WeightedTrade> observed) {
+        ensureDirectories();
+        String name = DefaultConfigurations.fileName(profession);
+        File reference = new File(generatedDefaultsDirectory, name);
+        ProfessionTradeConfig catalogue = read(reference, ProfessionTradeConfig.class, null);
+        if (catalogue == null) catalogue = DefaultConfigurations.createDiscoveredProfessionDefault(profession);
+        if (catalogue.trades == null) catalogue.trades = new ArrayList<WeightedTrade>();
+
+        Map<String, WeightedTrade> unique = new LinkedHashMap<String, WeightedTrade>();
+        for (WeightedTrade trade : catalogue.trades) {
+            if (trade != null && trade.buy != null && trade.sell != null) unique.put(tradeKey(trade), trade);
+        }
+
+        int before = unique.size();
+        for (WeightedTrade trade : observed) {
+            if (trade != null && trade.buy != null && trade.sell != null) {
+                String key = tradeKey(trade);
+                if (!unique.containsKey(key)) unique.put(key, trade);
+            }
+        }
+
+        catalogue.profession = profession;
+        catalogue.mode = "replace";
+        catalogue.trades = new ArrayList<WeightedTrade>(unique.values());
+        catalogue.rolls = catalogue.trades.size();
+        for (int index = 0; index < catalogue.trades.size(); index++) {
+            catalogue.trades.get(index).id = "observed_" + (index + 1);
+        }
+        writeReplacing(reference, catalogue);
+        return new int[] { observed.size(), unique.size() - before, unique.size() };
+    }
+
     public CombatConfig getCombat() {
         return combat;
     }
@@ -146,6 +180,21 @@ public final class ModConfiguration {
         }
         if (config.trades == null) config.trades = new ArrayList<WeightedTrade>();
         return true;
+    }
+
+    private String tradeKey(WeightedTrade trade) {
+        return stackKey(
+            trade.buy) + '|' + stackKey(trade.buySecondary) + '|' + stackKey(trade.sell) + '|' + rangeKey(trade.uses);
+    }
+
+    private String stackKey(ItemSpec stack) {
+        if (stack == null) return "-";
+        return String.valueOf(
+            stack.item) + ':' + stack.meta + ':' + rangeKey(stack.count) + ':' + String.valueOf(stack.nbt);
+    }
+
+    private String rangeKey(IntRange range) {
+        return range == null ? "-" : range.min + ":" + range.max;
     }
 
     private <T> T read(File file, Class<T> type, T fallback) {

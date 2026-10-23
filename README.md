@@ -34,6 +34,13 @@ named `profession_<id>.json` in both `trades/` and `generated_defaults/`, then r
 subsequent trade generation. Existing legacy files remain explicit user configuration and are not
 deleted automatically.
 
+Inspection initializes the targeted villager's current offers and merges them into
+`generated_defaults/profession_<id>.json` as an exact `replace` catalogue. Counts, metadata, item
+NBT, second payment items, and maximum uses are retained. The active file in `trades/` is not
+changed. Because other mods may randomize offers or unlock them progressively, repeated inspection
+of different villagers with the same profession can reveal and append further variants; this is an
+observed catalogue rather than a promise that every theoretical offer has been discovered.
+
 The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
 profession is also registered when reloading. Existing villagers retain recipes already saved in
 their entity data; the new configuration is used when a villager next generates a recipe list.
@@ -46,5 +53,5 @@ Village Mechanics deliberately leaves target selection and melee movement to Spe
 installed. Natural armour is mechanically active and saved normally but is not rendered by this
 prototype.
 
-Use `/villagemechanics inspect` near a villager to report its profession, health, attack damage,
-armour value, and hidden equipment slots.
+Use `/villagemechanics inspect` while looking at a villager to catalogue its visible trade offers
+and report its profession, health, attack damage, armour value, and hidden equipment slots.

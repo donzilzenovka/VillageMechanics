@@ -72,6 +72,17 @@ public final class VillageMechanicsCommand extends CommandBase {
         if (created != null) {
             player.addChatMessage(new ChatComponentText("Created trade template " + created + "."));
         }
+        int[] observed = tradeManager.recordObservedTrades(target, player);
+        player.addChatMessage(
+            new ChatComponentText(
+                "Observed " + observed[0]
+                    + " offers ("
+                    + observed[1]
+                    + " new, "
+                    + observed[2]
+                    + " catalogued) in generated_defaults/profession_"
+                    + profession
+                    + ".json."));
 
         IAttributeInstance attack = target.getEntityAttribute(SharedMonsterAttributes.attackDamage);
         player.addChatMessage(

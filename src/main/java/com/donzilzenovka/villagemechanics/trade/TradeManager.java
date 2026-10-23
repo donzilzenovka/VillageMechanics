@@ -7,8 +7,12 @@ import java.util.Random;
 import java.util.Set;
 
 import net.minecraft.entity.passive.EntityVillager;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.JsonToNBT;
+import net.minecraft.nbt.NBTBase;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.village.MerchantRecipe;
 import net.minecraft.village.MerchantRecipeList;
 
@@ -54,6 +58,26 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
         String created = configuration.discoverProfession(profession);
         register();
         return created;
+    }
+
+    @SuppressWarnings("unchecked")
+    public int[] recordObservedTrades(EntityVillager villager, EntityPlayer player) {
+        MerchantRecipeList recipes = villager.getRecipes(player);
+        List<WeightedTrade> observed = new ArrayList<WeightedTrade>();
+        if (recipes != null) {
+            for (MerchantRecipe recipe : (List<MerchantRecipe>) recipes) {
+                if (recipe == null) continue;
+                WeightedTrade trade = new WeightedTrade();
+                trade.weight = 1;
+                trade.buy = describe(recipe.getItemToBuy());
+                trade.buySecondary = describe(recipe.getSecondItemToBuy());
+                trade.sell = describe(recipe.getItemToSell());
+                NBTTagCompound tags = recipe.writeToTags();
+                trade.uses = new IntRange(Math.max(1, tags.getInteger("maxUses")));
+                observed.add(trade);
+            }
+        }
+        return configuration.recordObservedTrades(villager.getProfession(), observed);
     }
 
     @Override
@@ -133,7 +157,33 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
         }
         int requested = spec.count == null ? 1 : spec.count.choose(random);
         int count = Math.max(1, Math.min(requested, ((Item) registered).getItemStackLimit()));
-        return new ItemStack((Item) registered, count, spec.meta);
+        ItemStack stack = new ItemStack((Item) registered, count, spec.meta);
+        if (spec.nbt != null && !spec.nbt.trim()
+            .isEmpty()) {
+            try {
+                NBTBase parsed = JsonToNBT.func_150315_a(spec.nbt);
+                if (!(parsed instanceof NBTTagCompound)) {
+                    reportInvalidNbt(tradeId, "root is not a compound");
+                    return null;
+                }
+                stack.setTagCompound((NBTTagCompound) parsed);
+            } catch (Exception exception) {
+                reportInvalidNbt(tradeId, exception.getMessage());
+                return null;
+            }
+        }
+        return stack;
+    }
+
+    private ItemSpec describe(ItemStack stack) {
+        if (stack == null || stack.getItem() == null) return null;
+        Object name = Item.itemRegistry.getNameForObject(stack.getItem());
+        if (name == null) return null;
+        ItemSpec result = new ItemSpec(String.valueOf(name), stack.stackSize);
+        result.meta = stack.getItemDamage();
+        if (stack.hasTagCompound()) result.nbt = stack.getTagCompound()
+            .toString();
+        return result;
     }
 
     private synchronized void reportInvalid(String itemName, String tradeId) {
@@ -141,5 +191,11 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
         if (reportedInvalidItems.add(key)) {
             logger.error("Skipping trade {} because item '{}' is not registered", tradeId, itemName);
         }
+    }
+
+    private synchronized void reportInvalidNbt(String tradeId, String reason) {
+        String key = "nbt@" + tradeId;
+        if (reportedInvalidItems.add(key))
+            logger.error("Skipping trade {} because its item NBT is invalid: {}", tradeId, reason);
     }
 }
