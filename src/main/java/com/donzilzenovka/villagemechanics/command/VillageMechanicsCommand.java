@@ -76,11 +76,11 @@ public final class VillageMechanicsCommand extends CommandBase {
         player.addChatMessage(
             new ChatComponentText(
                 "Observed " + observed[0]
-                    + " offers ("
+                    + " pool entries ("
                     + observed[1]
                     + " new, "
                     + observed[2]
-                    + " catalogued) in generated_defaults/profession_"
+                    + " catalogued) in trade_pools/profession_"
                     + profession
                     + ".json."));
 

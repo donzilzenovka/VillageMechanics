@@ -5,9 +5,12 @@ import java.util.List;
 
 public final class ProfessionTradeConfig {
 
-    public int schemaVersion = 1;
+    public int schemaVersion = 2;
     public int profession;
-    public String mode = "replace";
-    public int rolls = 5;
-    public List<WeightedTrade> trades = new ArrayList<WeightedTrade>();
+    public List<WeightedTrade> pool = new ArrayList<WeightedTrade>();
+
+    // Read compatibility for prototype schema 1 files. These are normalized into pool when loaded.
+    public String mode;
+    public Integer rolls;
+    public List<WeightedTrade> trades;
 }

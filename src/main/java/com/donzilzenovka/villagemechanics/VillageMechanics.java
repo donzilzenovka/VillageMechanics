@@ -55,9 +55,9 @@ public final class VillageMechanics {
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
-        configuration.discoverProfessions(VillagerRegistry.getRegisteredVillagers());
         tradeManager = new TradeManager(configuration, LogManager.getLogger(MOD_ID));
         tradeManager.register();
+        tradeManager.registerProfessions(VillagerRegistry.getRegisteredVillagers());
     }
 
     @EventHandler

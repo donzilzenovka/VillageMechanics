@@ -25,7 +25,7 @@ public final class ModConfiguration {
 
     private final File root;
     private final File tradesDirectory;
-    private final File generatedDefaultsDirectory;
+    private final File tradePoolsDirectory;
     private final File combatFile;
     private final Logger logger;
     private volatile CombatConfig combat = new CombatConfig();
@@ -34,7 +34,7 @@ public final class ModConfiguration {
     public ModConfiguration(File root, Logger logger) {
         this.root = root;
         this.tradesDirectory = new File(root, "trades");
-        this.generatedDefaultsDirectory = new File(root, "generated_defaults");
+        this.tradePoolsDirectory = new File(root, "trade_pools");
         this.combatFile = new File(root, "combat.json");
         this.logger = logger;
     }
@@ -48,24 +48,6 @@ public final class ModConfiguration {
         logger.info("Loaded {} profession trade configurations", trades.size());
     }
 
-    public synchronized void discoverProfessions(Iterable<Integer> professions) {
-        boolean added = false;
-        for (Integer profession : professions) {
-            if (profession == null || profession.intValue() < 0 || trades.containsKey(profession)) continue;
-            int id = profession.intValue();
-            String name = DefaultConfigurations.fileName(id);
-            File active = new File(tradesDirectory, name);
-            if (active.exists()) continue;
-
-            ProfessionTradeConfig config = DefaultConfigurations.createDiscoveredProfessionDefault(id);
-            writeReplacing(active, config);
-            writeReplacing(new File(generatedDefaultsDirectory, name), config);
-            logger.info("Created safe append template {} for registered profession {}", name, id);
-            added = true;
-        }
-        if (added) load();
-    }
-
     public synchronized String discoverProfession(int profession) {
         if (profession < 0 || trades.containsKey(Integer.valueOf(profession))) return null;
 
@@ -75,11 +57,10 @@ public final class ModConfiguration {
         File active = new File(tradesDirectory, name);
         boolean created = !active.exists();
         writeIfMissing(active, config);
-        writeReplacing(new File(generatedDefaultsDirectory, name), config);
         load();
 
         if (created && trades.containsKey(Integer.valueOf(profession))) {
-            logger.info("Created safe append template {} for inspected profession {}", name, profession);
+            logger.info("Created empty authoritative pool {} for inspected profession {}", name, profession);
             return name;
         }
         return null;
@@ -88,13 +69,13 @@ public final class ModConfiguration {
     public synchronized int[] recordObservedTrades(int profession, List<WeightedTrade> observed) {
         ensureDirectories();
         String name = DefaultConfigurations.fileName(profession);
-        File reference = new File(generatedDefaultsDirectory, name);
+        File reference = new File(tradePoolsDirectory, name);
         ProfessionTradeConfig catalogue = read(reference, ProfessionTradeConfig.class, null);
         if (catalogue == null) catalogue = DefaultConfigurations.createDiscoveredProfessionDefault(profession);
-        if (catalogue.trades == null) catalogue.trades = new ArrayList<WeightedTrade>();
+        normalize(catalogue, reference);
 
         Map<String, WeightedTrade> unique = new LinkedHashMap<String, WeightedTrade>();
-        for (WeightedTrade trade : catalogue.trades) {
+        for (WeightedTrade trade : catalogue.pool) {
             if (trade != null && trade.buy != null && trade.sell != null) unique.put(tradeKey(trade), trade);
         }
 
@@ -107,11 +88,13 @@ public final class ModConfiguration {
         }
 
         catalogue.profession = profession;
-        catalogue.mode = "replace";
-        catalogue.trades = new ArrayList<WeightedTrade>(unique.values());
-        catalogue.rolls = catalogue.trades.size();
-        for (int index = 0; index < catalogue.trades.size(); index++) {
-            catalogue.trades.get(index).id = "observed_" + (index + 1);
+        catalogue.schemaVersion = 2;
+        catalogue.mode = null;
+        catalogue.rolls = null;
+        catalogue.trades = null;
+        catalogue.pool = new ArrayList<WeightedTrade>(unique.values());
+        for (int index = 0; index < catalogue.pool.size(); index++) {
+            catalogue.pool.get(index).id = "observed_" + (index + 1);
         }
         writeReplacing(reference, catalogue);
         return new int[] { observed.size(), unique.size() - before, unique.size() };
@@ -136,8 +119,8 @@ public final class ModConfiguration {
         if (!tradesDirectory.isDirectory() && !tradesDirectory.mkdirs()) {
             throw new IllegalStateException("Could not create " + tradesDirectory);
         }
-        if (!generatedDefaultsDirectory.isDirectory() && !generatedDefaultsDirectory.mkdirs()) {
-            throw new IllegalStateException("Could not create " + generatedDefaultsDirectory);
+        if (!tradePoolsDirectory.isDirectory() && !tradePoolsDirectory.mkdirs()) {
+            throw new IllegalStateException("Could not create " + tradePoolsDirectory);
         }
     }
 
@@ -160,6 +143,7 @@ public final class ModConfiguration {
                 .toLowerCase()
                 .endsWith(".json")) continue;
             ProfessionTradeConfig config = read(file, ProfessionTradeConfig.class, null);
+            if (config != null) normalize(config, file);
             if (config == null || !validate(config, file)) continue;
             ProfessionTradeConfig replaced = result.put(Integer.valueOf(config.profession), config);
             if (replaced != null) {
@@ -170,16 +154,16 @@ public final class ModConfiguration {
     }
 
     private boolean validate(ProfessionTradeConfig config, File file) {
-        if (!("replace".equalsIgnoreCase(config.mode) || "append".equalsIgnoreCase(config.mode))) {
-            logger.error("Ignoring {}: mode must be replace or append", file.getName());
-            return false;
-        }
-        if (config.rolls < 0) {
-            logger.error("Ignoring {}: rolls cannot be negative", file.getName());
-            return false;
-        }
-        if (config.trades == null) config.trades = new ArrayList<WeightedTrade>();
+        if (config.pool == null) config.pool = new ArrayList<WeightedTrade>();
         return true;
+    }
+
+    private void normalize(ProfessionTradeConfig config, File file) {
+        if ((config.pool == null || config.pool.isEmpty()) && config.trades != null && !config.trades.isEmpty()) {
+            config.pool = config.trades;
+            logger.warn("Loaded legacy schema 1 entries from {} as an authoritative trade pool", file.getName());
+        }
+        if (config.pool == null) config.pool = new ArrayList<WeightedTrade>();
     }
 
     private String tradeKey(WeightedTrade trade) {
