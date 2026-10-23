@@ -14,6 +14,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 
@@ -39,7 +40,7 @@ public final class VillageMechanicsCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/villagemechanics <reload|inspect>";
+        return "/villagemechanics <reload|validate|inspect>";
     }
 
     @Override
@@ -51,8 +52,18 @@ public final class VillageMechanicsCommand extends CommandBase {
     public void processCommand(ICommandSender sender, String[] arguments) throws CommandException {
         if (arguments.length != 1) throw new CommandException(getCommandUsage(sender));
         if ("reload".equalsIgnoreCase(arguments[0])) {
-            tradeManager.reload();
+            List<String> diagnostics = tradeManager.reloadAndValidate();
             sender.addChatMessage(new ChatComponentText("Village Mechanics configuration reloaded."));
+            reportDiagnostics(sender, diagnostics);
+            return;
+        }
+        if ("validate".equalsIgnoreCase(arguments[0])) {
+            List<String> diagnostics = tradeManager.reloadAndValidate();
+            if (diagnostics.isEmpty()) {
+                sender.addChatMessage(new ChatComponentText("Village Mechanics configuration is valid."));
+            } else {
+                reportDiagnostics(sender, diagnostics);
+            }
             return;
         }
         if ("inspect".equalsIgnoreCase(arguments[0]) && sender instanceof EntityPlayer) {
@@ -60,6 +71,16 @@ public final class VillageMechanicsCommand extends CommandBase {
             return;
         }
         throw new CommandException(getCommandUsage(sender));
+    }
+
+    private void reportDiagnostics(ICommandSender sender, List<String> diagnostics) {
+        if (diagnostics.isEmpty()) return;
+        sender.addChatMessage(
+            new ChatComponentText(
+                EnumChatFormatting.RED + "Village Mechanics found " + diagnostics.size() + " configuration error(s):"));
+        for (String diagnostic : diagnostics) {
+            sender.addChatMessage(new ChatComponentText(EnumChatFormatting.RED + "- " + diagnostic));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -166,4 +187,3 @@ public final class VillageMechanicsCommand extends CommandBase {
         }
     }
 }
-

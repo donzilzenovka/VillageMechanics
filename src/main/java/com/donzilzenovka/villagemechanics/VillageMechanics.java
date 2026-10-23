@@ -59,8 +59,7 @@ public final class VillageMechanics {
         MinecraftForge.EVENT_BUS.register(new OwnedTradeInteractionHandler(tradeManager));
         registerClientTradeMatcher();
         LogManager.getLogger(MOD_ID)
-            .info(
-                "Independent trade engine enabled for configured professions; Mystcraft and profession 5 are excluded");
+            .info("Independent trade engine enabled for configured professions");
     }
 
     private void registerClientTradeMatcher() {
@@ -85,4 +84,3 @@ public final class VillageMechanics {
         event.registerServerCommand(new VillageMechanicsCommand(configuration, tradeManager));
     }
 }
-

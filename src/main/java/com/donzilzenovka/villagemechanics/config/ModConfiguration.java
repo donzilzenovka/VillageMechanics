@@ -32,6 +32,10 @@ public final class ModConfiguration {
     private final Logger logger;
     private volatile CombatConfig combat = new CombatConfig();
     private volatile Map<Integer, ProfessionTradeConfig> trades = Collections.emptyMap();
+    private volatile Map<Integer, String> tradeSources = Collections.emptyMap();
+    private volatile List<String> diagnostics = Collections.emptyList();
+    private List<String> loadingDiagnostics = new ArrayList<String>();
+    private Map<Integer, String> loadingTradeSources = new HashMap<Integer, String>();
 
     public ModConfiguration(File root, Logger logger) {
         this.root = root;
@@ -42,11 +46,15 @@ public final class ModConfiguration {
     }
 
     public synchronized void load() {
+        loadingDiagnostics = new ArrayList<String>();
+        loadingTradeSources = new HashMap<Integer, String>();
         ensureDirectories();
         writeIfMissing(combatFile, DefaultConfigurations.createCombatDefault());
 
         combat = read(combatFile, CombatConfig.class, DefaultConfigurations.createCombatDefault());
         trades = Collections.unmodifiableMap(readTradeFiles());
+        tradeSources = Collections.unmodifiableMap(new HashMap<Integer, String>(loadingTradeSources));
+        diagnostics = Collections.unmodifiableList(new ArrayList<String>(loadingDiagnostics));
         logger.info("Loaded {} profession trade configurations", trades.size());
     }
 
@@ -123,6 +131,15 @@ public final class ModConfiguration {
         return trades.get(Integer.valueOf(profession));
     }
 
+    public String getTradeSource(int profession) {
+        String source = tradeSources.get(Integer.valueOf(profession));
+        return source == null ? "profession " + profession : source;
+    }
+
+    public List<String> getDiagnostics() {
+        return new ArrayList<String>(diagnostics);
+    }
+
     private void ensureDirectories() {
         if (!root.isDirectory() && !root.mkdirs()) {
             throw new IllegalStateException("Could not create " + root);
@@ -157,6 +174,7 @@ public final class ModConfiguration {
             if (config != null) normalize(config, file);
             if (config == null || !validate(config, file)) continue;
             ProfessionTradeConfig replaced = result.put(Integer.valueOf(config.profession), config);
+            loadingTradeSources.put(Integer.valueOf(config.profession), file.getName());
             if (replaced != null) {
                 logger.warn("{} overrides another file for profession {}", file.getName(), config.profession);
             }
@@ -172,10 +190,12 @@ public final class ModConfiguration {
                 || group.id.trim()
                     .isEmpty()) {
                 logger.error("Ignoring {}: every trade group requires a non-empty id", file.getName());
+                addDiagnostic(file, "every trade group requires a non-empty id");
                 return false;
             }
             if (!groupIds.add(group.id)) {
                 logger.error("Ignoring {}: duplicate trade group id '{}'", file.getName(), group.id);
+                addDiagnostic(file, "duplicate trade group id '" + group.id + "'");
                 return false;
             }
             if (group.pool == null) group.pool = new ArrayList<WeightedTrade>();
@@ -185,10 +205,12 @@ public final class ModConfiguration {
                     || trade.id.trim()
                         .isEmpty()) {
                     logger.error("Ignoring {}: every trade requires a non-empty id", file.getName());
+                    addDiagnostic(file, "every trade requires a non-empty id");
                     return false;
                 }
                 if (!tradeIds.add(trade.id)) {
                     logger.error("Ignoring {}: duplicate trade id '{}'", file.getName(), trade.id);
+                    addDiagnostic(file, "duplicate trade id '" + trade.id + "'");
                     return false;
                 }
             }
@@ -234,12 +256,26 @@ public final class ModConfiguration {
             return value == null ? fallback : value;
         } catch (Exception exception) {
             logger.error("Could not read {}; retaining safe defaults", file, exception);
+            addDiagnostic(file, cleanMessage(exception));
             return fallback;
         } finally {
             if (reader != null) try {
                 reader.close();
             } catch (IOException ignored) {}
         }
+    }
+
+    private void addDiagnostic(File file, String reason) {
+        loadingDiagnostics.add(file.getName() + ": " + reason);
+    }
+
+    private String cleanMessage(Exception exception) {
+        Throwable cause = exception;
+        while (cause.getCause() != null) cause = cause.getCause();
+        String message = cause.getMessage();
+        return message == null || message.trim()
+            .isEmpty() ? cause.getClass()
+                .getSimpleName() : message;
     }
 
     private void writeIfMissing(File file, Object value) {
@@ -260,4 +296,3 @@ public final class ModConfiguration {
         }
     }
 }
-

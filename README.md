@@ -24,7 +24,8 @@ Configuration is generated under `config/VillageMechanics/` on first launch.
 
 Village Mechanics does not depend on vanilla or Forge candidate trade tables. It takes control when
 the player interacts with an ordinary `EntityVillager` whose profession has a populated active pool.
-Profession 5 and Mystcraft profession 1210950779 are explicitly excluded.
+Control is entirely opt-in: professions without a populated active JSON pool retain their original
+trading system, with no hard-coded profession exclusions.
 
 `/villagemechanics inspect` creates an empty active `trades/profession_<id>.json` only when missing.
 Schema 4 divides a profession into independently sampled `groups`. Each group has a unique `id`, its
@@ -37,6 +38,8 @@ uses may also be fixed or randomized with `min` and `max` constraints. The same 
 same selection whenever its interface opens. Matching recipes retain their current use counts;
 recipes outside the configured selection are removed. Group IDs must be unique, and trade IDs must
 be unique across the entire profession file. Invalid files are ignored with a specific log error.
+When a controlled villager is opened on a later Minecraft day, its selected offers are restocked by
+resetting their use counts. This check occurs only during interaction and adds no per-tick processing.
 
 Controlled villagers use exact offer matching. The selected recipe must match the supplied items'
 registry IDs, metadata, NBT, and minimum counts. This prevents a higher-tier metadata variant of one
@@ -50,11 +53,13 @@ pool files never control gameplay and active files are never overwritten.
 Schema 1-3 files are accepted as one implicit schema 4 group named `default`. The old
 `generated_defaults` directory is no longer used or removed automatically.
 
-The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
-profession becomes active on its next interaction after reloading. Existing villagers are supported:
-their offers are reconciled with the configured stable selection when the interface next opens.
-Removing a profession trade file and reloading restores each affected villager's original trade list
-when the interface next opens.
+The server command `/villagemechanics reload` reloads JSON configuration and reports configuration
+errors in chat. `/villagemechanics validate` performs the same reload and reports whether the files
+are valid. Syntax errors include Gson's source line and column where available; semantic errors name
+the file and affected group or trade. A newly introduced profession becomes active on its next
+interaction after reloading. Existing villagers are supported: their offers are reconciled with the
+configured stable selection when the interface next opens. Removing a profession trade file and
+reloading restores each affected villager's original trade list when the interface next opens.
 
 ## Combat configuration
 
@@ -66,4 +71,3 @@ prototype.
 
 Use `/villagemechanics inspect` while looking at a villager to catalogue its saved offers, then report
 its profession, health, attack damage, armour value, and hidden equipment slots.
-

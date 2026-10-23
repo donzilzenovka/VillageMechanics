@@ -33,6 +33,7 @@ public final class TradeManager {
 
     private static final String ORIGINAL_TRADES_TAG = "VillageMechanicsOriginalTrades";
     private static final String TRADE_REVISION_TAG = "VillageMechanicsTradeRevision";
+    private static final String LAST_RESTOCK_DAY_TAG = "VillageMechanicsLastRestockDay";
 
     private final ModConfiguration configuration;
     private final Logger logger;
@@ -43,8 +44,76 @@ public final class TradeManager {
         this.logger = logger;
     }
 
-    public synchronized void reload() {
+    public synchronized List<String> reloadAndValidate() {
         configuration.load();
+        return validateConfiguration();
+    }
+
+    private List<String> validateConfiguration() {
+        List<String> diagnostics = configuration.getDiagnostics();
+        for (Map.Entry<Integer, ProfessionTradeConfig> entry : configuration.getTrades()
+            .entrySet()) {
+            ProfessionTradeConfig config = entry.getValue();
+            String source = configuration.getTradeSource(
+                entry.getKey()
+                    .intValue());
+            if (config.schemaVersion < 1 || config.schemaVersion > 4) {
+                diagnostics.add(source + ": unsupported schemaVersion " + config.schemaVersion);
+            }
+            if (config.groups == null) continue;
+            for (TradeGroupConfig group : config.groups) {
+                if (group == null) continue;
+                validateRange(diagnostics, source, "group '" + group.id + "' offerCount", group.offerCount, true);
+                if (group.pool == null) continue;
+                for (WeightedTrade trade : group.pool) validateTrade(diagnostics, source, trade);
+            }
+        }
+        return diagnostics;
+    }
+
+    private void validateTrade(List<String> diagnostics, String source, WeightedTrade trade) {
+        if (trade == null) return;
+        String label = "trade '" + trade.id + "'";
+        if (trade.weight <= 0) diagnostics.add(source + ": " + label + " weight must be greater than zero");
+        validateItem(diagnostics, source, label + " buy", trade.buy);
+        validateItem(diagnostics, source, label + " buySecondary", trade.buySecondary);
+        validateItem(diagnostics, source, label + " sell", trade.sell);
+        validateRange(diagnostics, source, label + " uses", trade.uses, false);
+    }
+
+    private void validateItem(List<String> diagnostics, String source, String label, ItemSpec spec) {
+        if (spec == null) {
+            if (!label.endsWith("buySecondary")) diagnostics.add(source + ": " + label + " is missing");
+            return;
+        }
+        if (spec.item == null || spec.item.trim()
+            .isEmpty() || !(Item.itemRegistry.getObject(spec.item) instanceof Item)) {
+            diagnostics.add(source + ": " + label + " item '" + spec.item + "' is not registered");
+        }
+        validateRange(diagnostics, source, label + " count", spec.count, false);
+        if (spec.nbt != null && !spec.nbt.trim()
+            .isEmpty()) {
+            try {
+                if (!(JsonToNBT.func_150315_a(spec.nbt) instanceof NBTTagCompound)) {
+                    diagnostics.add(source + ": " + label + " NBT root must be a compound");
+                }
+            } catch (Exception exception) {
+                diagnostics.add(source + ": " + label + " has invalid NBT: " + exception.getMessage());
+            }
+        }
+    }
+
+    private void validateRange(List<String> diagnostics, String source, String label, IntRange range,
+        boolean allowZero) {
+        if (range == null) {
+            diagnostics.add(source + ": " + label + " is missing");
+            return;
+        }
+        int minimum = allowZero ? 0 : 1;
+        if (range.min < minimum || range.max < minimum) {
+            diagnostics.add(source + ": " + label + " values must be at least " + minimum);
+        }
+        if (range.min > range.max) diagnostics.add(source + ": " + label + " min exceeds max");
     }
 
     public synchronized String discoverProfession(int profession) {
@@ -54,8 +123,6 @@ public final class TradeManager {
     @SuppressWarnings("unchecked")
     public void applyOwnedTrades(EntityVillager villager, EntityPlayer player) {
         int profession = villager.getProfession();
-        if (profession == 5 || profession == 1210950779) return;
-
         ProfessionTradeConfig config = configuration.getTradeConfig(profession);
         if (config == null || config.groups == null || !hasTrades(config.groups)) {
             restoreOriginalTrades(villager, player);
@@ -64,6 +131,10 @@ public final class TradeManager {
 
         MerchantRecipeList current = villager.getRecipes(player);
         rememberOriginalTrades(villager, current);
+        NBTTagCompound entityData = villager.getEntityData();
+        long currentDay = villager.worldObj.getTotalWorldTime() / 24000L;
+        boolean restock = entityData.hasKey(LAST_RESTOCK_DAY_TAG, 99)
+            && currentDay > entityData.getLong(LAST_RESTOCK_DAY_TAG);
 
         int revision = poolRevision(config);
         long seed = villager.getUniqueID()
@@ -98,12 +169,18 @@ public final class TradeManager {
         ExactMerchantRecipeList controlled = new ExactMerchantRecipeList();
         for (MerchantRecipe recipe : expected) {
             MerchantRecipe existing = preserved.get(recipeKey(recipe));
-            controlled.add(existing == null ? recipe : new OwnedMerchantRecipe(existing));
+            controlled.add(existing == null ? recipe : copyOwnedRecipe(existing, restock));
         }
         ObfuscationReflectionHelper
             .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
-        villager.getEntityData()
-            .setInteger(TRADE_REVISION_TAG, revision);
+        entityData.setInteger(TRADE_REVISION_TAG, revision);
+        entityData.setLong(LAST_RESTOCK_DAY_TAG, currentDay);
+    }
+
+    private MerchantRecipe copyOwnedRecipe(MerchantRecipe recipe, boolean restock) {
+        NBTTagCompound tags = recipe.writeToTags();
+        if (restock) tags.setInteger("uses", 0);
+        return new OwnedMerchantRecipe(tags);
     }
 
     private void rememberOriginalTrades(EntityVillager villager, MerchantRecipeList current) {
@@ -123,6 +200,7 @@ public final class TradeManager {
             .setPrivateValue(EntityVillager.class, villager, restored, "buyingList", "field_70963_i");
         entityData.removeTag(ORIGINAL_TRADES_TAG);
         entityData.removeTag(TRADE_REVISION_TAG);
+        entityData.removeTag(LAST_RESTOCK_DAY_TAG);
 
         // Villagers controlled by builds predating the snapshot regenerate their
         // original Forge/vanilla pool once, because no saved list exists for them.
@@ -318,4 +396,3 @@ public final class TradeManager {
             logger.error("Skipping trade {} because its item NBT is invalid: {}", tradeId, reason);
     }
 }
-
