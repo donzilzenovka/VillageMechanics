@@ -67,10 +67,16 @@ public final class VillageMechanicsCommand extends CommandBase {
         EntityVillager target = targetedVillager(player);
         if (target == null) throw new CommandException("No villager under crosshair within 8 blocks.");
 
+        int profession = target.getProfession();
+        String created = tradeManager.discoverProfession(profession);
+        if (created != null) {
+            player.addChatMessage(new ChatComponentText("Created trade template " + created + "."));
+        }
+
         IAttributeInstance attack = target.getEntityAttribute(SharedMonsterAttributes.attackDamage);
         player.addChatMessage(
             new ChatComponentText(
-                "Villager professionId=" + target.getProfession()
+                "Villager professionId=" + profession
                     + " health="
                     + target.getHealth()
                     + "/"

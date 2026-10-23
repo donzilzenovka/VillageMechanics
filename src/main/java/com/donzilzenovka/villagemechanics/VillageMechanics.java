@@ -18,7 +18,6 @@ import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
-import cpw.mods.fml.common.registry.VillagerRegistry;
 
 @Mod(
     modid = VillageMechanics.MOD_ID,
@@ -33,7 +32,6 @@ public final class VillageMechanics {
 
     private static ModConfiguration configuration;
     private static TradeManager tradeManager;
-    private static boolean observingVillagers;
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -57,16 +55,11 @@ public final class VillageMechanics {
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         tradeManager = new TradeManager(configuration, LogManager.getLogger(MOD_ID));
+        tradeManager.register();
     }
 
     @EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
-        configuration.discoverProfessions(VillagerRegistry.getRegisteredVillagers());
-        tradeManager.register();
-        if (!observingVillagers) {
-            MinecraftForge.EVENT_BUS.register(tradeManager);
-            observingVillagers = true;
-        }
         event.registerServerCommand(new VillageMechanicsCommand(configuration, tradeManager));
     }
 }
