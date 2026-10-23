@@ -63,6 +63,14 @@ public final class DefaultConfigurations {
         return config;
     }
 
+    public static ProfessionTradeConfig createDiscoveredProfessionDefault(int profession) {
+        ProfessionTradeConfig config = new ProfessionTradeConfig();
+        config.profession = profession;
+        config.mode = "append";
+        config.rolls = 0;
+        return config;
+    }
+
     private static ProfessionTradeConfig farmer() {
         ProfessionTradeConfig config = profession(0, 5);
         add(config, "wheat_for_emerald", 10, item("minecraft:wheat", 18, 22), item("minecraft:emerald", 1));

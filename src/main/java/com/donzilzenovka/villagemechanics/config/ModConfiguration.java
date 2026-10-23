@@ -9,8 +9,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.logging.log4j.Logger;
 
@@ -51,6 +53,31 @@ public final class ModConfiguration {
         combat = read(combatFile, CombatConfig.class, DefaultConfigurations.createCombatDefault());
         trades = Collections.unmodifiableMap(readTradeFiles());
         logger.info("Loaded {} profession trade configurations", trades.size());
+    }
+
+    public synchronized void discoverProfessions(Iterable<Integer> professions) {
+        ensureDirectories();
+        Set<Integer> discovered = new HashSet<Integer>();
+        for (Integer profession : professions) {
+            if (profession != null && profession.intValue() >= 0) discovered.add(profession);
+        }
+        boolean added = false;
+        for (Integer profession : discovered) {
+            int id = profession.intValue();
+            if (trades.containsKey(profession)) continue;
+            ProfessionTradeConfig config = DefaultConfigurations.createDiscoveredProfessionDefault(id);
+            String name = DefaultConfigurations.fileName(id);
+            File active = new File(tradesDirectory, name);
+            writeIfMissing(active, config);
+            writeReplacing(new File(generatedDefaultsDirectory, name), config);
+            added = true;
+            logger.info("Discovered villager profession {}; created safe append template {}", id, active.getName());
+        }
+        if (added) load();
+    }
+
+    public synchronized void discoverProfession(int profession) {
+        discoverProfessions(Collections.singleton(Integer.valueOf(profession)));
     }
 
     public CombatConfig getCombat() {
@@ -114,8 +141,29 @@ public final class ModConfiguration {
             logger.error("Ignoring {}: rolls cannot be negative", file.getName());
             return false;
         }
+        if (config.remove == null) config.remove = new ArrayList<TradeRemoval>();
+        for (TradeRemoval removal : config.remove) {
+            if (removal == null || !validRemoval(removal)) {
+                logger.error(
+                    "Ignoring {}: each remove entry and item object must contain at least one match field",
+                    file.getName());
+                return false;
+            }
+        }
         if (config.trades == null) config.trades = new ArrayList<WeightedTrade>();
         return true;
+    }
+
+    private boolean validRemoval(TradeRemoval removal) {
+        boolean present = removal.buy != null || removal.buySecondary != null || removal.sell != null;
+        return present && validMatch(removal.buy) && validMatch(removal.buySecondary) && validMatch(removal.sell);
+    }
+
+    private boolean validMatch(ItemMatch match) {
+        return match == null || match.meta != null
+            || match.count != null
+            || (match.item != null && !match.item.trim()
+                .isEmpty());
     }
 
     private <T> T read(File file, Class<T> type, T fallback) {

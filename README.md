@@ -24,12 +24,36 @@ Configuration is generated under `config/VillageMechanics/` on first launch.
 
 The five vanilla professions receive individual files in `config/VillageMechanics/trades/`.
 Each file may use `replace` mode to own the final recipe list or `append` mode to preserve trades
-added earlier by vanilla and other mods. `rolls` controls how many unique entries are chosen, and
-each entry's positive `weight` is relative to the total weight of the remaining entries.
+added earlier by vanilla and other mods. In append mode, entries in `remove` selectively discard
+matching existing recipes before entries in `trades` are added. `rolls` controls how many unique
+additions are chosen, and each entry's positive `weight` is relative to the total weight of the
+remaining entries.
+
+A removal may match `buy`, `buySecondary`, and/or `sell`. Within each item match, `item`, `meta`,
+and `count` are optional; omitted values are wildcards. An empty removal is rejected to prevent an
+accidental deletion of every recipe. For example:
+
+```json
+{
+  "profession": 191,
+  "mode": "append",
+  "rolls": 0,
+  "remove": [
+    {
+      "buy": { "item": "minecraft:emerald" },
+      "sell": { "item": "examplemod:unwanted_item", "meta": 0 }
+    }
+  ],
+  "trades": []
+}
+```
 
 Fresh reference copies are written to `config/VillageMechanics/generated_defaults/` on every load.
 Files in the active `trades/` directory are only created when missing and are never overwritten.
-Additional modded professions can be configured as `profession_<id>.json`.
+At server startup the Forge villager registry is scanned and safe empty append templates are made
+for modded professions as `profession_<id>.json`. A one-time entity-join observation also catches
+villagers from mods that assign a profession without registering it correctly. This observation
+does not poll villagers and does not replace or attempt to reconstruct another mod's native trades.
 
 The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
 profession is also registered when reloading. Existing villagers retain recipes already saved in
@@ -43,5 +67,5 @@ Village Mechanics deliberately leaves target selection and melee movement to Spe
 installed. Natural armour is mechanically active and saved normally but is not rendered by this
 prototype.
 
-Use `/villagemechanics inspect` near a villager to report its profession, health, attack damage,
-armour value, and hidden equipment slots.
+Use `/villagemechanics inspect` while looking directly at a villager to report its raw profession
+ID, health, attack damage, armour value, and hidden equipment slots.

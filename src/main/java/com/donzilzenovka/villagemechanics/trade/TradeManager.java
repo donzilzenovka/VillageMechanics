@@ -2,6 +2,7 @@ package com.donzilzenovka.villagemechanics.trade;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -11,15 +12,19 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.village.MerchantRecipe;
 import net.minecraft.village.MerchantRecipeList;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 
 import org.apache.logging.log4j.Logger;
 
 import com.donzilzenovka.villagemechanics.config.IntRange;
+import com.donzilzenovka.villagemechanics.config.ItemMatch;
 import com.donzilzenovka.villagemechanics.config.ItemSpec;
 import com.donzilzenovka.villagemechanics.config.ModConfiguration;
 import com.donzilzenovka.villagemechanics.config.ProfessionTradeConfig;
+import com.donzilzenovka.villagemechanics.config.TradeRemoval;
 import com.donzilzenovka.villagemechanics.config.WeightedTrade;
 
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.registry.VillagerRegistry;
 
 public final class TradeManager implements VillagerRegistry.IVillageTradeHandler {
@@ -50,12 +55,25 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
         register();
     }
 
+    @SubscribeEvent
+    public void onEntityJoinWorld(EntityJoinWorldEvent event) {
+        if (event.world.isRemote || !(event.entity instanceof EntityVillager)) return;
+        int profession = ((EntityVillager) event.entity).getProfession();
+        if (configuration.getTradeConfig(profession) != null) return;
+        configuration.discoverProfession(profession);
+        register();
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public void manipulateTradesForVillager(EntityVillager villager, MerchantRecipeList recipes, Random random) {
         ProfessionTradeConfig config = configuration.getTradeConfig(villager.getProfession());
         if (config == null) return;
-        if ("replace".equalsIgnoreCase(config.mode)) recipes.clear();
+        if ("replace".equalsIgnoreCase(config.mode)) {
+            recipes.clear();
+        } else {
+            removeMatchingRecipes(config.remove, recipes);
+        }
 
         List<WeightedTrade> candidates = new ArrayList<WeightedTrade>();
         for (WeightedTrade trade : config.trades) {
@@ -69,6 +87,42 @@ public final class TradeManager implements VillagerRegistry.IVillageTradeHandler
             MerchantRecipe recipe = createRecipe(selected, random);
             if (recipe != null) recipes.add(recipe);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removeMatchingRecipes(List<TradeRemoval> removals, MerchantRecipeList recipes) {
+        if (removals == null || removals.isEmpty()) return;
+        Iterator<MerchantRecipe> iterator = recipes.iterator();
+        while (iterator.hasNext()) {
+            MerchantRecipe recipe = iterator.next();
+            if (matchesAny(removals, recipe)) iterator.remove();
+        }
+    }
+
+    private boolean matchesAny(List<TradeRemoval> removals, MerchantRecipe recipe) {
+        for (TradeRemoval removal : removals) {
+            if (removal != null && matches(removal.buy, recipe.getItemToBuy())
+                && matches(removal.buySecondary, recipe.getSecondItemToBuy())
+                && matches(removal.sell, recipe.getItemToSell())) return true;
+        }
+        return false;
+    }
+
+    private boolean matches(ItemMatch expected, ItemStack actual) {
+        if (expected == null) return true;
+        if (actual == null) return false;
+        if (expected.item != null && !expected.item.trim()
+            .isEmpty()) {
+            Object name = Item.itemRegistry.getNameForObject(actual.getItem());
+            if (!expected.item.equals(String.valueOf(name))) return false;
+        }
+        if (expected.meta != null && expected.meta.intValue() != actual.getItemDamage()) return false;
+        if (expected.count != null) {
+            int minimum = Math.min(expected.count.min, expected.count.max);
+            int maximum = Math.max(expected.count.min, expected.count.max);
+            if (actual.stackSize < minimum || actual.stackSize > maximum) return false;
+        }
+        return true;
     }
 
     private WeightedTrade takeWeighted(List<WeightedTrade> candidates, Random random) {
