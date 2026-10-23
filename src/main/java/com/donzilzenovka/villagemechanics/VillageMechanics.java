@@ -57,9 +57,26 @@ public final class VillageMechanics {
     public void postInit(FMLPostInitializationEvent event) {
         tradeManager = new TradeManager(configuration, LogManager.getLogger(MOD_ID));
         MinecraftForge.EVENT_BUS.register(new OwnedTradeInteractionHandler(tradeManager));
+        registerClientTradeMatcher();
         LogManager.getLogger(MOD_ID)
             .info(
                 "Independent trade engine enabled for configured professions; Mystcraft and profession 5 are excluded");
+    }
+
+    private void registerClientTradeMatcher() {
+        if (!FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) return;
+        try {
+            Object handler = Class.forName("com.donzilzenovka.villagemechanics.trade.ClientMerchantListHandler")
+                .newInstance();
+            FMLCommonHandler.instance()
+                .bus()
+                .register(handler);
+        } catch (Exception exception) {
+            LogManager.getLogger(MOD_ID)
+                .error("Could not register the client exact-trade matcher", exception);
+        }
     }
 
     @EventHandler
