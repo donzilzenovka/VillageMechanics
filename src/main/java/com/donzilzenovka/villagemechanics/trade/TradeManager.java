@@ -31,6 +31,9 @@ import cpw.mods.fml.common.ObfuscationReflectionHelper;
 
 public final class TradeManager {
 
+    private static final String ORIGINAL_TRADES_TAG = "VillageMechanicsOriginalTrades";
+    private static final String TRADE_REVISION_TAG = "VillageMechanicsTradeRevision";
+
     private final ModConfiguration configuration;
     private final Logger logger;
     private final Set<String> reportedInvalidItems = new HashSet<String>();
@@ -54,7 +57,13 @@ public final class TradeManager {
         if (profession == 5 || profession == 1210950779) return;
 
         ProfessionTradeConfig config = configuration.getTradeConfig(profession);
-        if (config == null || config.groups == null || !hasTrades(config.groups)) return;
+        if (config == null || config.groups == null || !hasTrades(config.groups)) {
+            restoreOriginalTrades(villager, player);
+            return;
+        }
+
+        MerchantRecipeList current = villager.getRecipes(player);
+        rememberOriginalTrades(villager, current);
 
         int revision = poolRevision(config);
         long seed = villager.getUniqueID()
@@ -81,7 +90,6 @@ public final class TradeManager {
             }
         }
 
-        MerchantRecipeList current = villager.getRecipes(player);
         Map<String, MerchantRecipe> preserved = new LinkedHashMap<String, MerchantRecipe>();
         for (MerchantRecipe recipe : (List<MerchantRecipe>) current) {
             if (recipe != null) preserved.put(recipeKey(recipe), recipe);
@@ -95,7 +103,30 @@ public final class TradeManager {
         ObfuscationReflectionHelper
             .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
         villager.getEntityData()
-            .setInteger("VillageMechanicsTradeRevision", revision);
+            .setInteger(TRADE_REVISION_TAG, revision);
+    }
+
+    private void rememberOriginalTrades(EntityVillager villager, MerchantRecipeList current) {
+        NBTTagCompound entityData = villager.getEntityData();
+        if (entityData.hasKey(ORIGINAL_TRADES_TAG, 10) || entityData.hasKey(TRADE_REVISION_TAG, 99)) return;
+        entityData.setTag(ORIGINAL_TRADES_TAG, current.getRecipiesAsTags());
+    }
+
+    private void restoreOriginalTrades(EntityVillager villager, EntityPlayer player) {
+        NBTTagCompound entityData = villager.getEntityData();
+        if (!entityData.hasKey(TRADE_REVISION_TAG, 99)) return;
+
+        MerchantRecipeList restored = entityData.hasKey(ORIGINAL_TRADES_TAG, 10)
+            ? new MerchantRecipeList(entityData.getCompoundTag(ORIGINAL_TRADES_TAG))
+            : null;
+        ObfuscationReflectionHelper
+            .setPrivateValue(EntityVillager.class, villager, restored, "buyingList", "field_70963_i");
+        entityData.removeTag(ORIGINAL_TRADES_TAG);
+        entityData.removeTag(TRADE_REVISION_TAG);
+
+        // Villagers controlled by builds predating the snapshot regenerate their
+        // original Forge/vanilla pool once, because no saved list exists for them.
+        if (restored == null) villager.getRecipes(player);
     }
 
     private boolean hasTrades(List<TradeGroupConfig> groups) {

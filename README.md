@@ -54,6 +54,8 @@ Schema 1-3 files are accepted as one implicit schema 4 group named `default`. Th
 The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
 profession becomes active on its next interaction after reloading. Existing villagers are supported:
 their offers are reconciled with the configured stable selection when the interface next opens.
+Removing a profession trade file and reloading restores each affected villager's original trade list
+when the interface next opens.
 
 ## Combat configuration
 
@@ -65,3 +67,4 @@ prototype.
 
 Use `/villagemechanics inspect` while looking at a villager to catalogue its saved offers, then report
 its profession, health, attack damage, armour value, and hidden equipment slots.
+
