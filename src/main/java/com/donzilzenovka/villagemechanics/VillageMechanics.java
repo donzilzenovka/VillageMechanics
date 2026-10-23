@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import com.donzilzenovka.villagemechanics.combat.VillagerCombatHandler;
 import com.donzilzenovka.villagemechanics.command.VillageMechanicsCommand;
 import com.donzilzenovka.villagemechanics.config.ModConfiguration;
+import com.donzilzenovka.villagemechanics.trade.DiagnosticTradeOverrideHandler;
 import com.donzilzenovka.villagemechanics.trade.TradeManager;
 
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -18,7 +19,6 @@ import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
-import cpw.mods.fml.common.registry.VillagerRegistry;
 
 @Mod(
     modid = VillageMechanics.MOD_ID,
@@ -42,6 +42,7 @@ public final class VillageMechanics {
 
         VillagerCombatHandler combatHandler = new VillagerCombatHandler(configuration, event.getModLog());
         MinecraftForge.EVENT_BUS.register(combatHandler);
+        MinecraftForge.EVENT_BUS.register(new DiagnosticTradeOverrideHandler());
         FMLCommonHandler.instance()
             .bus()
             .register(combatHandler);
@@ -56,8 +57,9 @@ public final class VillageMechanics {
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         tradeManager = new TradeManager(configuration, LogManager.getLogger(MOD_ID));
-        tradeManager.register();
-        tradeManager.registerProfessions(VillagerRegistry.getRegisteredVillagers());
+        LogManager.getLogger(MOD_ID)
+            .warn(
+                "Diagnostic trade override enabled: every EntityVillager is forced to trade one dirt for one diamond");
     }
 
     @EventHandler

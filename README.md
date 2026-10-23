@@ -2,6 +2,10 @@
 
 Village Mechanics is a conservative Minecraft Forge 1.7.10 villager extension.
 
+> **Diagnostic build:** trade-pool registration is temporarily disabled. On the server, interacting
+> with any `EntityVillager` clears its saved offers and installs one trade: one dirt for one diamond.
+> This intentionally destructive trade behavior is only a compatibility benchmark.
+
 The initial prototype provides:
 
 - profession-specific authoritative weighted trade pools;
