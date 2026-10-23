@@ -38,6 +38,10 @@ same selection whenever its interface opens. Matching recipes retain their curre
 recipes outside the configured selection are removed. Group IDs must be unique, and trade IDs must
 be unique across the entire profession file. Invalid files are ignored with a specific log error.
 
+Controlled villagers use exact offer matching. The selected recipe must match the supplied items'
+registry IDs, metadata, NBT, and minimum counts. This prevents a higher-tier metadata variant of one
+registered item from satisfying a lower-tier trade merely because both variants share an item ID.
+
 Inspection merges the villager's saved offers into `trade_pools/profession_<id>.json` as reference
 material. Counts, metadata, item NBT, second payment items, and maximum uses are retained. Reference
 pool files never control gameplay and active files are never overwritten.

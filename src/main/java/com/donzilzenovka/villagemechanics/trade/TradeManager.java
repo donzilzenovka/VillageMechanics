@@ -27,6 +27,8 @@ import com.donzilzenovka.villagemechanics.config.ProfessionTradeConfig;
 import com.donzilzenovka.villagemechanics.config.TradeGroupConfig;
 import com.donzilzenovka.villagemechanics.config.WeightedTrade;
 
+import cpw.mods.fml.common.ObfuscationReflectionHelper;
+
 public final class TradeManager {
 
     private final ModConfiguration configuration;
@@ -85,11 +87,13 @@ public final class TradeManager {
             if (recipe != null) preserved.put(recipeKey(recipe), recipe);
         }
 
-        current.clear();
+        ExactMerchantRecipeList controlled = new ExactMerchantRecipeList();
         for (MerchantRecipe recipe : expected) {
             MerchantRecipe existing = preserved.get(recipeKey(recipe));
-            current.add(existing == null ? recipe : existing);
+            controlled.add(existing == null ? recipe : existing);
         }
+        ObfuscationReflectionHelper
+            .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
         villager.getEntityData()
             .setInteger("VillageMechanicsTradeRevision", revision);
     }
