@@ -30,6 +30,9 @@ public final class ClientMerchantListHandler {
         ItemStack.class,
         Integer.TYPE,
         Integer.TYPE);
+    private Method getNeiManager;
+    private Method renderNeiToolTips;
+    private boolean neiLookupAttempted;
 
     @SubscribeEvent
     @SuppressWarnings("unchecked")
@@ -52,6 +55,7 @@ public final class ClientMerchantListHandler {
     @SubscribeEvent
     public void onDrawScreenPost(GuiScreenEvent.DrawScreenEvent.Post event) {
         if (!(event.gui instanceof GuiMerchant)) return;
+        if (redrawNeiTooltip((GuiContainer) event.gui, event.mouseX, event.mouseY)) return;
 
         Slot slot = ObfuscationReflectionHelper
             .getPrivateValue(GuiContainer.class, (GuiContainer) event.gui, "theSlot", "field_147006_u");
@@ -62,6 +66,32 @@ public final class ClientMerchantListHandler {
             renderToolTip.invoke(event.gui, slot.getStack(), event.mouseX, event.mouseY);
         } catch (Exception exception) {
             throw new IllegalStateException("Could not redraw the merchant inventory tooltip", exception);
+        }
+    }
+
+    private boolean redrawNeiTooltip(GuiContainer gui, int mouseX, int mouseY) {
+        if (!neiLookupAttempted) {
+            neiLookupAttempted = true;
+            try {
+                Class<?> managerClass = Class.forName("codechicken.nei.guihook.GuiContainerManager");
+                getNeiManager = managerClass.getMethod("getManager", GuiContainer.class);
+                renderNeiToolTips = managerClass.getMethod("renderToolTips", Integer.TYPE, Integer.TYPE);
+            } catch (Exception ignored) {
+                getNeiManager = null;
+                renderNeiToolTips = null;
+            }
+        }
+        if (getNeiManager == null || renderNeiToolTips == null) return false;
+
+        try {
+            Object manager = getNeiManager.invoke(null, gui);
+            if (manager == null) return false;
+            renderNeiToolTips.invoke(manager, mouseX, mouseY);
+            return true;
+        } catch (Exception exception) {
+            getNeiManager = null;
+            renderNeiToolTips = null;
+            return false;
         }
     }
 }
