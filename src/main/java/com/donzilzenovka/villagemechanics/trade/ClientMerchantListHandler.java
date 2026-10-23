@@ -12,6 +12,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.village.MerchantRecipeList;
 import net.minecraftforge.client.event.GuiScreenEvent;
 
+import org.lwjgl.opengl.GL11;
+
+import com.donzilzenovka.villagemechanics.network.TradeStateStore;
+
 import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -55,6 +59,7 @@ public final class ClientMerchantListHandler {
     @SubscribeEvent
     public void onDrawScreenPost(GuiScreenEvent.DrawScreenEvent.Post event) {
         if (!(event.gui instanceof GuiMerchant)) return;
+        drawFiniteTradeCounter((GuiMerchant) event.gui);
         if (redrawNeiTooltip((GuiContainer) event.gui, event.mouseX, event.mouseY)) return;
 
         Slot slot = ObfuscationReflectionHelper
@@ -67,6 +72,27 @@ public final class ClientMerchantListHandler {
         } catch (Exception exception) {
             throw new IllegalStateException("Could not redraw the merchant inventory tooltip", exception);
         }
+    }
+
+    private void drawFiniteTradeCounter(GuiMerchant gui) {
+        int recipeIndex = ObfuscationReflectionHelper.getPrivateValue(GuiMerchant.class, gui, "field_147041_z");
+        int remaining = TradeStateStore.remainingFiniteUses(recipeIndex);
+        if (remaining < 0) return;
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        String label = String.valueOf(remaining);
+        int guiLeft = (gui.width - 176) / 2;
+        int guiTop = (gui.height - 166) / 2;
+        int x = guiLeft + 137 - minecraft.fontRenderer.getStringWidth(label);
+        int colour = remaining <= 0 ? 0xFF5555 : 0xFFFFFF;
+
+        GL11.glPushMatrix();
+        GL11.glTranslatef(0.0F, 0.0F, 300.0F);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        minecraft.fontRenderer.drawStringWithShadow(label, x, guiTop + 33, colour);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glPopMatrix();
     }
 
     private boolean redrawNeiTooltip(GuiContainer gui, int mouseX, int mouseY) {
@@ -95,4 +121,3 @@ public final class ClientMerchantListHandler {
         }
     }
 }
-

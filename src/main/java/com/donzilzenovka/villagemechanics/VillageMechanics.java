@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import com.donzilzenovka.villagemechanics.combat.VillagerCombatHandler;
 import com.donzilzenovka.villagemechanics.command.VillageMechanicsCommand;
 import com.donzilzenovka.villagemechanics.config.ModConfiguration;
+import com.donzilzenovka.villagemechanics.network.TradeNetwork;
 import com.donzilzenovka.villagemechanics.trade.OwnedTradeInteractionHandler;
 import com.donzilzenovka.villagemechanics.trade.TradeManager;
 
@@ -39,6 +40,7 @@ public final class VillageMechanics {
         File root = new File(event.getModConfigurationDirectory(), "VillageMechanics");
         configuration = new ModConfiguration(root, event.getModLog());
         configuration.load();
+        TradeNetwork.initialize();
 
         VillagerCombatHandler combatHandler = new VillagerCombatHandler(configuration, event.getModLog());
         MinecraftForge.EVENT_BUS.register(combatHandler);

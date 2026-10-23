@@ -10,6 +10,7 @@ import java.util.Set;
 
 import net.minecraft.entity.passive.EntityVillager;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.JsonToNBT;
@@ -26,6 +27,7 @@ import com.donzilzenovka.villagemechanics.config.ModConfiguration;
 import com.donzilzenovka.villagemechanics.config.ProfessionTradeConfig;
 import com.donzilzenovka.villagemechanics.config.TradeGroupConfig;
 import com.donzilzenovka.villagemechanics.config.WeightedTrade;
+import com.donzilzenovka.villagemechanics.network.TradeNetwork;
 
 import cpw.mods.fml.common.ObfuscationReflectionHelper;
 
@@ -127,6 +129,7 @@ public final class TradeManager {
         ProfessionTradeConfig config = configuration.getTradeConfig(profession);
         if (config == null || config.groups == null || !hasTrades(config.groups)) {
             restoreOriginalTrades(villager, player);
+            if (player instanceof EntityPlayerMP) TradeNetwork.sendClear((EntityPlayerMP) player);
             return;
         }
 
@@ -173,19 +176,29 @@ public final class TradeManager {
         ExactMerchantRecipeList controlled = new ExactMerchantRecipeList();
         for (MerchantRecipe recipe : expected) {
             MerchantRecipe existing = preserved.get(recipeKey(recipe));
-            controlled.add(existing == null ? recipe : copyOwnedRecipe(existing, restock));
+            boolean shouldRestock = ((OwnedMerchantRecipe) recipe).shouldRestock();
+            controlled
+                .add(existing == null ? recipe : copyOwnedRecipe(existing, restock && shouldRestock, shouldRestock));
+        }
+        EntityPlayerMP viewer = player instanceof EntityPlayerMP ? (EntityPlayerMP) player : null;
+        for (int index = 0; index < controlled.size(); index++) {
+            ((OwnedMerchantRecipe) controlled.get(index))
+                .configure(((OwnedMerchantRecipe) controlled.get(index)).shouldRestock(), index, viewer);
         }
         ObfuscationReflectionHelper
             .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
         entityData.setInteger(TRADE_REVISION_TAG, revision);
         entityData.setLong(LAST_RESTOCK_DAY_TAG, currentDay);
         entityData.removeTag(LEGACY_RESTOCK_DAY_TAG);
+        if (viewer != null) TradeNetwork.sendFull(viewer, controlled);
     }
 
-    private MerchantRecipe copyOwnedRecipe(MerchantRecipe recipe, boolean restock) {
+    private MerchantRecipe copyOwnedRecipe(MerchantRecipe recipe, boolean resetUses, boolean shouldRestock) {
         NBTTagCompound tags = recipe.writeToTags();
-        if (restock) tags.setInteger("uses", 0);
-        return new OwnedMerchantRecipe(tags);
+        if (resetUses) tags.setInteger("uses", 0);
+        OwnedMerchantRecipe copy = new OwnedMerchantRecipe(tags);
+        copy.configure(shouldRestock, -1, null);
+        return copy;
     }
 
     private void rememberOriginalTrades(EntityVillager villager, MerchantRecipeList current) {
@@ -240,6 +253,7 @@ public final class TradeManager {
                 if (trade != null) {
                     revision = 31 * revision + String.valueOf(trade.id)
                         .hashCode();
+                    revision = 31 * revision + (trade.restock ? 1 : 0);
                     revision = 31 * revision + (31 * trade.weight + tradeKey(trade).hashCode());
                 }
             }
@@ -313,7 +327,8 @@ public final class TradeManager {
         ItemStack buySecondary = createStack(definition.buySecondary, random, definition.id);
         if (buy == null || sell == null) return null;
 
-        MerchantRecipe recipe = new OwnedMerchantRecipe(buy, buySecondary, sell);
+        OwnedMerchantRecipe recipe = new OwnedMerchantRecipe(buy, buySecondary, sell);
+        recipe.configure(definition.restock, -1, null);
         IntRange uses = definition.uses == null ? new IntRange(3, 7) : definition.uses;
         int requestedUses = Math.max(1, uses.choose(random));
         recipe.func_82783_a(requestedUses - 7);

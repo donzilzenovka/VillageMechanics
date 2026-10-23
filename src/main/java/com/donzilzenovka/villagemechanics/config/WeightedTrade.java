@@ -4,6 +4,7 @@ public final class WeightedTrade {
 
     public String id;
     public int weight = 1;
+    public boolean restock = true;
     public ItemSpec buy;
     public ItemSpec buySecondary;
     public ItemSpec sell;

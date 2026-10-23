@@ -40,6 +40,9 @@ recipes outside the configured selection are removed. Group IDs must be unique, 
 be unique across the entire profession file. Invalid files are ignored with a specific log error.
 When a controlled villager is opened on a later Minecraft day, its selected offers are restocked by
 resetting their use counts. This check occurs only during interaction and adds no per-tick processing.
+Individual trades may set `"restock": false` to remain permanently finite; omitted values default to
+`true`. The merchant screen displays the remaining purchases over a finite trade's output icon, with
+an exhausted zero shown in red. This counter is informational and does not alter the output stack.
 
 Controlled villagers use exact offer matching. The selected recipe must match the supplied items'
 registry IDs, metadata, NBT, and minimum counts. This prevents a higher-tier metadata variant of one
