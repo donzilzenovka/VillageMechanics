@@ -33,7 +33,8 @@ public final class TradeManager {
 
     private static final String ORIGINAL_TRADES_TAG = "VillageMechanicsOriginalTrades";
     private static final String TRADE_REVISION_TAG = "VillageMechanicsTradeRevision";
-    private static final String LAST_RESTOCK_DAY_TAG = "VillageMechanicsLastRestockDay";
+    private static final String LAST_RESTOCK_DAY_TAG = "VillageMechanicsLastRestockWorldDay";
+    private static final String LEGACY_RESTOCK_DAY_TAG = "VillageMechanicsLastRestockDay";
 
     private final ModConfiguration configuration;
     private final Logger logger;
@@ -132,9 +133,12 @@ public final class TradeManager {
         MerchantRecipeList current = villager.getRecipes(player);
         rememberOriginalTrades(villager, current);
         NBTTagCompound entityData = villager.getEntityData();
-        long currentDay = villager.worldObj.getTotalWorldTime() / 24000L;
-        boolean restock = entityData.hasKey(LAST_RESTOCK_DAY_TAG, 99)
-            && currentDay > entityData.getLong(LAST_RESTOCK_DAY_TAG);
+        // Use the visible Minecraft clock. Commands such as /time add and
+        // time-scaling mods advance worldTime, but do not necessarily advance
+        // the world's separate total tick counter at the same rate.
+        long currentDay = villager.worldObj.getWorldTime() / 24000L;
+        boolean restock = entityData.hasKey(LEGACY_RESTOCK_DAY_TAG, 99)
+            || entityData.hasKey(LAST_RESTOCK_DAY_TAG, 99) && currentDay > entityData.getLong(LAST_RESTOCK_DAY_TAG);
 
         int revision = poolRevision(config);
         long seed = villager.getUniqueID()
@@ -175,6 +179,7 @@ public final class TradeManager {
             .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
         entityData.setInteger(TRADE_REVISION_TAG, revision);
         entityData.setLong(LAST_RESTOCK_DAY_TAG, currentDay);
+        entityData.removeTag(LEGACY_RESTOCK_DAY_TAG);
     }
 
     private MerchantRecipe copyOwnedRecipe(MerchantRecipe recipe, boolean restock) {
@@ -201,6 +206,7 @@ public final class TradeManager {
         entityData.removeTag(ORIGINAL_TRADES_TAG);
         entityData.removeTag(TRADE_REVISION_TAG);
         entityData.removeTag(LAST_RESTOCK_DAY_TAG);
+        entityData.removeTag(LEGACY_RESTOCK_DAY_TAG);
 
         // Villagers controlled by builds predating the snapshot regenerate their
         // original Forge/vanilla pool once, because no saved list exists for them.
