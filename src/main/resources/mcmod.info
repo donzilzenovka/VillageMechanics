@@ -1,0 +1,13 @@
+[
+  {
+    "modid": "villagemechanics",
+    "name": "Village Mechanics",
+    "description": "Configurable villager trades and conservative village defence mechanics.",
+    "version": "${modVersion}",
+    "mcversion": "${minecraftVersion}",
+    "url": "https://github.com/donzilzenovka/VillageMechanics",
+    "authorList": ["donzilzenovka"],
+    "dependencies": []
+  }
+]
+

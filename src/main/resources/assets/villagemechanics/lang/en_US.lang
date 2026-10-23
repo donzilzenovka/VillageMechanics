@@ -1,0 +1,4 @@
+commands.villagemechanics.usage=/villagemechanics <reload|inspect>
+commands.villagemechanics.reloaded=Village Mechanics configuration reloaded.
+commands.villagemechanics.inspect.notVillager=Look directly at a villager within 8 blocks.
+
