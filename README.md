@@ -27,18 +27,23 @@ the player interacts with an ordinary `EntityVillager` whose profession has a po
 Profession 5 and Mystcraft profession 1210950779 are explicitly excluded.
 
 `/villagemechanics inspect` creates an empty active `trades/profession_<id>.json` only when missing.
-An empty `pool` is passive and preserves the original trading system. Once the active pool contains
-valid entries, Village Mechanics deterministically selects `offerCount` weighted entries for each
-villager. Item counts and maximum uses may be fixed or randomized with `min` and `max` constraints.
-The same villager receives the same selection whenever its interface opens. Matching recipes retain
-their current use counts; recipes outside the configured selection are removed.
+Schema 4 divides a profession into independently sampled `groups`. Each group has a unique `id`, its
+own inclusive `offerCount`, and a weighted `pool`. This permits, for example, one to three general
+offers plus exactly one special offer. A profession whose groups contain no entries is passive and
+preserves the original trading system. Counts of zero are valid for optional groups.
+
+Village Mechanics deterministically samples every group for each villager. Item counts and maximum
+uses may also be fixed or randomized with `min` and `max` constraints. The same villager receives the
+same selection whenever its interface opens. Matching recipes retain their current use counts;
+recipes outside the configured selection are removed. Group IDs must be unique, and trade IDs must
+be unique across the entire profession file. Invalid files are ignored with a specific log error.
 
 Inspection merges the villager's saved offers into `trade_pools/profession_<id>.json` as reference
 material. Counts, metadata, item NBT, second payment items, and maximum uses are retained. Reference
 pool files never control gameplay and active files are never overwritten.
 
-Prototype schema 1 `trades` entries are accepted as schema 3 authoritative `pool` entries for
-compatibility. The old `generated_defaults` directory is no longer used or removed automatically.
+Schema 1-3 files are accepted as one implicit schema 4 group named `default`. The old
+`generated_defaults` directory is no longer used or removed automatically.
 
 The server command `/villagemechanics reload` reloads JSON configuration. A newly introduced
 profession becomes active on its next interaction after reloading. Existing villagers are supported:

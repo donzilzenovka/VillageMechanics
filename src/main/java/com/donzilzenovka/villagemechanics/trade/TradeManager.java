@@ -24,6 +24,7 @@ import com.donzilzenovka.villagemechanics.config.IntRange;
 import com.donzilzenovka.villagemechanics.config.ItemSpec;
 import com.donzilzenovka.villagemechanics.config.ModConfiguration;
 import com.donzilzenovka.villagemechanics.config.ProfessionTradeConfig;
+import com.donzilzenovka.villagemechanics.config.TradeGroupConfig;
 import com.donzilzenovka.villagemechanics.config.WeightedTrade;
 
 public final class TradeManager {
@@ -51,7 +52,7 @@ public final class TradeManager {
         if (profession == 5 || profession == 1210950779) return;
 
         ProfessionTradeConfig config = configuration.getTradeConfig(profession);
-        if (config == null || config.pool == null || config.pool.isEmpty()) return;
+        if (config == null || config.groups == null || !hasTrades(config.groups)) return;
 
         int revision = poolRevision(config);
         long seed = villager.getUniqueID()
@@ -60,16 +61,22 @@ public final class TradeManager {
                 .getLeastSignificantBits()
             ^ revision;
         Random random = new Random(seed);
-        List<WeightedTrade> candidates = validCandidates(config.pool);
-        IntRange offerCount = config.offerCount == null ? new IntRange(1) : config.offerCount;
-        int requested = Math.max(1, offerCount.choose(random));
-        int count = Math.min(requested, candidates.size());
-
         List<MerchantRecipe> expected = new ArrayList<MerchantRecipe>();
-        while (expected.size() < count && !candidates.isEmpty()) {
-            WeightedTrade selected = takeWeighted(candidates, random);
-            MerchantRecipe recipe = selected == null ? null : createRecipe(selected, random);
-            if (recipe != null) expected.add(recipe);
+        for (TradeGroupConfig group : config.groups) {
+            if (group == null || group.pool == null) continue;
+            List<WeightedTrade> candidates = validCandidates(group.pool);
+            IntRange offerCount = group.offerCount == null ? new IntRange(1) : group.offerCount;
+            int requested = Math.max(0, offerCount.choose(random));
+            int count = Math.min(requested, candidates.size());
+            int added = 0;
+            while (added < count && !candidates.isEmpty()) {
+                WeightedTrade selected = takeWeighted(candidates, random);
+                MerchantRecipe recipe = selected == null ? null : createRecipe(selected, random);
+                if (recipe != null) {
+                    expected.add(recipe);
+                    added++;
+                }
+            }
         }
 
         MerchantRecipeList current = villager.getRecipes(player);
@@ -87,6 +94,13 @@ public final class TradeManager {
             .setInteger("VillageMechanicsTradeRevision", revision);
     }
 
+    private boolean hasTrades(List<TradeGroupConfig> groups) {
+        for (TradeGroupConfig group : groups) {
+            if (group != null && group.pool != null && !group.pool.isEmpty()) return true;
+        }
+        return false;
+    }
+
     private List<WeightedTrade> validCandidates(List<WeightedTrade> pool) {
         List<WeightedTrade> candidates = new ArrayList<WeightedTrade>();
         for (WeightedTrade trade : pool) {
@@ -97,9 +111,19 @@ public final class TradeManager {
 
     private int poolRevision(ProfessionTradeConfig config) {
         int revision = 31 + config.profession;
-        revision = 31 * revision + rangeKey(config.offerCount).hashCode();
-        for (WeightedTrade trade : config.pool) {
-            if (trade != null) revision = 31 * revision + (31 * trade.weight + tradeKey(trade).hashCode());
+        for (TradeGroupConfig group : config.groups) {
+            if (group == null) continue;
+            revision = 31 * revision + String.valueOf(group.id)
+                .hashCode();
+            revision = 31 * revision + rangeKey(group.offerCount).hashCode();
+            if (group.pool == null) continue;
+            for (WeightedTrade trade : group.pool) {
+                if (trade != null) {
+                    revision = 31 * revision + String.valueOf(trade.id)
+                        .hashCode();
+                    revision = 31 * revision + (31 * trade.weight + tradeKey(trade).hashCode());
+                }
+            }
         }
         return revision;
     }

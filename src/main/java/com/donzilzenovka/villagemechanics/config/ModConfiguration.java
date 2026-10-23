@@ -9,9 +9,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.logging.log4j.Logger;
 
@@ -75,8 +77,11 @@ public final class ModConfiguration {
         normalize(catalogue, reference);
 
         Map<String, WeightedTrade> unique = new LinkedHashMap<String, WeightedTrade>();
-        for (WeightedTrade trade : catalogue.pool) {
-            if (trade != null && trade.buy != null && trade.sell != null) unique.put(tradeKey(trade), trade);
+        for (TradeGroupConfig group : catalogue.groups) {
+            if (group == null || group.pool == null) continue;
+            for (WeightedTrade trade : group.pool) {
+                if (trade != null && trade.buy != null && trade.sell != null) unique.put(tradeKey(trade), trade);
+            }
         }
 
         int before = unique.size();
@@ -88,13 +93,19 @@ public final class ModConfiguration {
         }
 
         catalogue.profession = profession;
-        catalogue.schemaVersion = 3;
+        catalogue.schemaVersion = 4;
+        catalogue.offerCount = null;
+        catalogue.pool = null;
         catalogue.mode = null;
         catalogue.rolls = null;
         catalogue.trades = null;
-        catalogue.pool = new ArrayList<WeightedTrade>(unique.values());
-        for (int index = 0; index < catalogue.pool.size(); index++) {
-            catalogue.pool.get(index).id = "observed_" + (index + 1);
+        TradeGroupConfig observedGroup = new TradeGroupConfig("observed");
+        observedGroup.pool = new ArrayList<WeightedTrade>(unique.values());
+        observedGroup.offerCount = new IntRange(observedGroup.pool.size());
+        catalogue.groups = new ArrayList<TradeGroupConfig>();
+        catalogue.groups.add(observedGroup);
+        for (int index = 0; index < observedGroup.pool.size(); index++) {
+            observedGroup.pool.get(index).id = "observed_" + (index + 1);
         }
         writeReplacing(reference, catalogue);
         return new int[] { observed.size(), unique.size() - before, unique.size() };
@@ -154,16 +165,50 @@ public final class ModConfiguration {
     }
 
     private boolean validate(ProfessionTradeConfig config, File file) {
-        if (config.pool == null) config.pool = new ArrayList<WeightedTrade>();
+        Set<String> groupIds = new HashSet<String>();
+        Set<String> tradeIds = new HashSet<String>();
+        for (TradeGroupConfig group : config.groups) {
+            if (group == null || group.id == null
+                || group.id.trim()
+                    .isEmpty()) {
+                logger.error("Ignoring {}: every trade group requires a non-empty id", file.getName());
+                return false;
+            }
+            if (!groupIds.add(group.id)) {
+                logger.error("Ignoring {}: duplicate trade group id '{}'", file.getName(), group.id);
+                return false;
+            }
+            if (group.pool == null) group.pool = new ArrayList<WeightedTrade>();
+            if (group.offerCount == null) group.offerCount = new IntRange(1);
+            for (WeightedTrade trade : group.pool) {
+                if (trade == null || trade.id == null
+                    || trade.id.trim()
+                        .isEmpty()) {
+                    logger.error("Ignoring {}: every trade requires a non-empty id", file.getName());
+                    return false;
+                }
+                if (!tradeIds.add(trade.id)) {
+                    logger.error("Ignoring {}: duplicate trade id '{}'", file.getName(), trade.id);
+                    return false;
+                }
+            }
+        }
         return true;
     }
 
     private void normalize(ProfessionTradeConfig config, File file) {
+        if (config.groups == null) config.groups = new ArrayList<TradeGroupConfig>();
         if ((config.pool == null || config.pool.isEmpty()) && config.trades != null && !config.trades.isEmpty()) {
             config.pool = config.trades;
-            logger.warn("Loaded legacy schema 1 entries from {} as an authoritative trade pool", file.getName());
+            logger.warn("Loaded legacy schema 1 entries from {}", file.getName());
         }
-        if (config.pool == null) config.pool = new ArrayList<WeightedTrade>();
+        if (config.groups.isEmpty() && config.pool != null && !config.pool.isEmpty()) {
+            TradeGroupConfig group = new TradeGroupConfig("default");
+            group.offerCount = config.offerCount == null ? new IntRange(1) : config.offerCount;
+            group.pool = config.pool;
+            config.groups.add(group);
+            logger.warn("Loaded legacy trade pool from {} as group 'default'", file.getName());
+        }
     }
 
     private String tradeKey(WeightedTrade trade) {
