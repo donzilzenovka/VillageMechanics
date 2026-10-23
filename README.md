@@ -47,6 +47,9 @@ with the transaction the server will actually accept.
 Inspection merges the villager's saved offers into `trade_pools/profession_<id>.json` as reference
 material. Counts, metadata, item NBT, second payment items, and maximum uses are retained. Reference
 pool files never control gameplay and active files are never overwritten.
+When VillageMechanics has preserved that villager's pre-override offers, inspection also writes an
+editable schema 4 snapshot to `original_trades/profession_<id>_<villager UUID>.json`. This is an
+individual villager snapshot rather than a complete profession pool.
 
 Schema 1-3 files are accepted as one implicit schema 4 group named `default`. The old
 `generated_defaults` directory is no longer used or removed automatically.

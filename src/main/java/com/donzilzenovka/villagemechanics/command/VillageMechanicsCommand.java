@@ -83,6 +83,12 @@ public final class VillageMechanicsCommand extends CommandBase {
                     + " catalogued) in trade_pools/profession_"
                     + profession
                     + ".json."));
+        String original = tradeManager.exportOriginalTrades(target);
+        if (original != null) {
+            player.addChatMessage(
+                new ChatComponentText(
+                    "Exported the villager's pre-override offers to original_trades/" + original + "."));
+        }
 
         IAttributeInstance attack = target.getEntityAttribute(SharedMonsterAttributes.attackDamage);
         player.addChatMessage(
@@ -167,3 +173,4 @@ public final class VillageMechanicsCommand extends CommandBase {
         }
     }
 }
+
