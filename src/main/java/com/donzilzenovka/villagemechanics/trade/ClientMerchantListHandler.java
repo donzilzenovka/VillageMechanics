@@ -9,6 +9,7 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.IMerchant;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.village.MerchantRecipe;
 import net.minecraft.village.MerchantRecipeList;
 import net.minecraftforge.client.event.GuiScreenEvent;
 
@@ -59,7 +60,9 @@ public final class ClientMerchantListHandler {
     @SubscribeEvent
     public void onDrawScreenPost(GuiScreenEvent.DrawScreenEvent.Post event) {
         if (!(event.gui instanceof GuiMerchant)) return;
-        drawFiniteTradeCounter((GuiMerchant) event.gui);
+        GuiMerchant gui = (GuiMerchant) event.gui;
+        drawFiniteTradeCounter(gui);
+        if (redrawMerchantTooltip(gui, event.mouseX, event.mouseY)) return;
         if (redrawNeiTooltip((GuiContainer) event.gui, event.mouseX, event.mouseY)) return;
 
         Slot slot = ObfuscationReflectionHelper
@@ -83,16 +86,51 @@ public final class ClientMerchantListHandler {
         String label = String.valueOf(remaining);
         int guiLeft = (gui.width - 176) / 2;
         int guiTop = (gui.height - 166) / 2;
-        int x = guiLeft + 137 - minecraft.fontRenderer.getStringWidth(label);
-        int colour = remaining <= 0 ? 0xFF5555 : 0xFFFFFF;
+        int x = guiLeft + 139;
+        int colour = remaining <= 0 ? 0xFF5555 : 0xFFFF55;
 
         GL11.glPushMatrix();
         GL11.glTranslatef(0.0F, 0.0F, 300.0F);
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
-        minecraft.fontRenderer.drawStringWithShadow(label, x, guiTop + 33, colour);
+        minecraft.fontRenderer.drawStringWithShadow(label, x, guiTop + 28, colour);
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glPopMatrix();
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean redrawMerchantTooltip(GuiMerchant gui, int mouseX, int mouseY) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        MerchantRecipeList recipes = gui.func_147035_g()
+            .getRecipes(minecraft.thePlayer);
+        if (recipes == null || recipes.isEmpty()) return false;
+
+        int recipeIndex = ObfuscationReflectionHelper.getPrivateValue(GuiMerchant.class, gui, "field_147041_z");
+        if (recipeIndex < 0 || recipeIndex >= recipes.size()) return false;
+
+        MerchantRecipe recipe = (MerchantRecipe) recipes.get(recipeIndex);
+        int guiLeft = (gui.width - 176) / 2;
+        int guiTop = (gui.height - 166) / 2;
+        ItemStack hovered = null;
+        if (inside(mouseX, mouseY, guiLeft + 36, guiTop + 24)) {
+            hovered = recipe.getItemToBuy();
+        } else if (recipe.getSecondItemToBuy() != null && inside(mouseX, mouseY, guiLeft + 62, guiTop + 24)) {
+            hovered = recipe.getSecondItemToBuy();
+        } else if (inside(mouseX, mouseY, guiLeft + 120, guiTop + 24)) {
+            hovered = recipe.getItemToSell();
+        }
+        if (hovered == null) return false;
+
+        try {
+            renderToolTip.invoke(gui, hovered, mouseX, mouseY);
+            return true;
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not redraw the merchant trade tooltip", exception);
+        }
+    }
+
+    private boolean inside(int mouseX, int mouseY, int left, int top) {
+        return mouseX >= left && mouseX < left + 16 && mouseY >= top && mouseY < top + 16;
     }
 
     private boolean redrawNeiTooltip(GuiContainer gui, int mouseX, int mouseY) {
