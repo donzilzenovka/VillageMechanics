@@ -194,23 +194,6 @@ public final class TradeManager {
         return configuration.recordObservedTrades(villager.getProfession(), observed);
     }
 
-    @SuppressWarnings("unchecked")
-    public String exportOriginalTrades(EntityVillager villager) {
-        NBTTagCompound entityData = villager.getEntityData();
-        if (!entityData.hasKey(ORIGINAL_TRADES_TAG, 10)) return null;
-
-        MerchantRecipeList recipes = new MerchantRecipeList(entityData.getCompoundTag(ORIGINAL_TRADES_TAG));
-        List<WeightedTrade> original = new ArrayList<WeightedTrade>();
-        for (MerchantRecipe recipe : (List<MerchantRecipe>) recipes) {
-            if (recipe != null) original.add(describe(recipe));
-        }
-        return configuration.exportOriginalTrades(
-            villager.getProfession(),
-            villager.getUniqueID()
-                .toString(),
-            original);
-    }
-
     private WeightedTrade takeWeighted(List<WeightedTrade> candidates, Random random) {
         long total = 0L;
         for (WeightedTrade candidate : candidates) total += Math.max(0, candidate.weight);

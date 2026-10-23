@@ -28,7 +28,6 @@ public final class ModConfiguration {
     private final File root;
     private final File tradesDirectory;
     private final File tradePoolsDirectory;
-    private final File originalTradesDirectory;
     private final File combatFile;
     private final Logger logger;
     private volatile CombatConfig combat = new CombatConfig();
@@ -38,7 +37,6 @@ public final class ModConfiguration {
         this.root = root;
         this.tradesDirectory = new File(root, "trades");
         this.tradePoolsDirectory = new File(root, "trade_pools");
-        this.originalTradesDirectory = new File(root, "original_trades");
         this.combatFile = new File(root, "combat.json");
         this.logger = logger;
     }
@@ -113,23 +111,6 @@ public final class ModConfiguration {
         return new int[] { observed.size(), unique.size() - before, unique.size() };
     }
 
-    public synchronized String exportOriginalTrades(int profession, String villagerId, List<WeightedTrade> original) {
-        ensureDirectories();
-        ProfessionTradeConfig snapshot = DefaultConfigurations.createDiscoveredProfessionDefault(profession);
-        TradeGroupConfig group = new TradeGroupConfig("original");
-        group.offerCount = new IntRange(original.size());
-        group.pool = original;
-        for (int index = 0; index < group.pool.size(); index++) {
-            group.pool.get(index).id = "original_" + (index + 1);
-        }
-        snapshot.groups = new ArrayList<TradeGroupConfig>();
-        snapshot.groups.add(group);
-
-        String name = "profession_" + profession + "_" + villagerId + ".json";
-        writeReplacing(new File(originalTradesDirectory, name), snapshot);
-        return name;
-    }
-
     public CombatConfig getCombat() {
         return combat;
     }
@@ -151,9 +132,6 @@ public final class ModConfiguration {
         }
         if (!tradePoolsDirectory.isDirectory() && !tradePoolsDirectory.mkdirs()) {
             throw new IllegalStateException("Could not create " + tradePoolsDirectory);
-        }
-        if (!originalTradesDirectory.isDirectory() && !originalTradesDirectory.mkdirs()) {
-            throw new IllegalStateException("Could not create " + originalTradesDirectory);
         }
     }
 
