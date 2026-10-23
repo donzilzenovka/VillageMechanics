@@ -73,6 +73,7 @@ public final class VillageMechanics {
             FMLCommonHandler.instance()
                 .bus()
                 .register(handler);
+            MinecraftForge.EVENT_BUS.register(handler);
         } catch (Exception exception) {
             LogManager.getLogger(MOD_ID)
                 .error("Could not register the client exact-trade matcher", exception);
@@ -84,3 +85,4 @@ public final class VillageMechanics {
         event.registerServerCommand(new VillageMechanicsCommand(configuration, tradeManager));
     }
 }
+

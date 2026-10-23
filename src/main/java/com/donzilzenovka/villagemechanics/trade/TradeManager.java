@@ -90,7 +90,7 @@ public final class TradeManager {
         ExactMerchantRecipeList controlled = new ExactMerchantRecipeList();
         for (MerchantRecipe recipe : expected) {
             MerchantRecipe existing = preserved.get(recipeKey(recipe));
-            controlled.add(existing == null ? recipe : existing);
+            controlled.add(existing == null ? recipe : new OwnedMerchantRecipe(existing));
         }
         ObfuscationReflectionHelper
             .setPrivateValue(EntityVillager.class, villager, controlled, "buyingList", "field_70963_i");
@@ -198,7 +198,7 @@ public final class TradeManager {
         ItemStack buySecondary = createStack(definition.buySecondary, random, definition.id);
         if (buy == null || sell == null) return null;
 
-        MerchantRecipe recipe = new MerchantRecipe(buy, buySecondary, sell);
+        MerchantRecipe recipe = new OwnedMerchantRecipe(buy, buySecondary, sell);
         IntRange uses = definition.uses == null ? new IntRange(3, 7) : definition.uses;
         int requestedUses = Math.max(1, uses.choose(random));
         recipe.func_82783_a(requestedUses - 7);
@@ -287,3 +287,4 @@ public final class TradeManager {
             logger.error("Skipping trade {} because its item NBT is invalid: {}", tradeId, reason);
     }
 }
+
